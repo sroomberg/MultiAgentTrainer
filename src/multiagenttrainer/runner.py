@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import re
 import shlex
 import shutil
@@ -17,6 +16,7 @@ import git as gitpython
 from rich.console import Console
 
 from .config import AutoresearchConfig, TrainingConfig
+from .executor import Executor, build_executor
 
 log = logging.getLogger(__name__)
 
@@ -42,11 +42,13 @@ class Runner:
         autoresearch_cfg: AutoresearchConfig,
         training_cfg: TrainingConfig,
         console: Console | None = None,
+        executor: Executor | None = None,
     ) -> None:
         self.ar_cfg = autoresearch_cfg
         self.tr_cfg = training_cfg
         self.console = console or Console()
         self.run_id = uuid.uuid4().hex[:8]
+        self.executor: Executor = executor or build_executor(training_cfg.execution)
 
     def setup_workspace(self, corpus_path: Path | None = None) -> Path:
         """Clone or copy autoresearch into a working directory.
@@ -106,6 +108,22 @@ class Runner:
             f"— max {self.tr_cfg.max_experiments} experiments[/bold]\n"
         )
 
+        # Upload workspace to the execution target (no-op for LocalExecutor).
+        exec_cfg = self.tr_cfg.execution
+        if exec_cfg.type == "ssh":
+            remote_ar_dir = exec_cfg.remote_dir.rstrip("/") + f"/{self.run_id}/autoresearch"
+        elif exec_cfg.type == "docker":
+            remote_ar_dir = exec_cfg.container_dir.rstrip("/") + f"/{self.run_id}/autoresearch"
+        else:
+            remote_ar_dir = str(ar_dir)
+
+        if exec_cfg.type in ("ssh", "docker"):
+            self.console.print(
+                f"  [dim]Uploading workspace → {remote_ar_dir}…[/dim]"
+            )
+            await self.executor.upload(ar_dir, remote_ar_dir)
+            self.console.print("  [dim]Upload complete[/dim]")
+
         prompt = (
             "Hi have a look at program.md and let's kick off a new experiment! "
             "let's do the setup first."
@@ -115,7 +133,7 @@ class Runner:
             self.console.print(
                 f"  [bold]Experiment {i}/{self.tr_cfg.max_experiments}[/bold]"
             )
-            result = await self._run_one(ar_dir, prompt, i)
+            result = await self._run_one(remote_ar_dir, prompt, i)
             results.append(result)
 
             icon = "✅" if result.exit_code == 0 else "❌"
@@ -136,71 +154,34 @@ class Runner:
 
     async def _run_one(
         self,
-        ar_dir: Path,
+        ar_dir: str,
         prompt: str,
         experiment_id: int,
     ) -> ExperimentResult:
-        """Run a single experiment by invoking the agent command."""
+        """Run a single experiment by invoking the agent command via the executor."""
         start = time.monotonic()
 
         cmd = self.tr_cfg.agent_command
         if "{prompt}" in cmd:
             cmd = cmd.replace("{prompt}", shlex.quote(prompt))
 
-        env = os.environ.copy()
+        result = await self.executor.run(
+            cmd=cmd,
+            cwd=ar_dir,
+            timeout=self.ar_cfg.train_time + 120,
+        )
 
-        stdout_lines: list[str] = []
-        stderr_lines: list[str] = []
+        val_bpb = self._parse_val_bpb(result.stdout + result.stderr)
 
-        try:
-            proc = await asyncio.create_subprocess_shell(
-                cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=ar_dir,
-                env=env,
-                start_new_session=True,
-            )
-
-            try:
-                stdout_raw, stderr_raw = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=self.ar_cfg.train_time + 120,
-                )
-            except asyncio.TimeoutError:
-                proc.kill()
-                return ExperimentResult(
-                    experiment_id=experiment_id,
-                    exit_code=-1,
-                    duration=time.monotonic() - start,
-                    error="Timed out",
-                )
-
-            stdout_text = stdout_raw.decode("utf-8", errors="replace")
-            stderr_text = stderr_raw.decode("utf-8", errors="replace")
-            stdout_lines = stdout_text.splitlines()
-            stderr_lines = stderr_text.splitlines()
-
-            val_bpb = self._parse_val_bpb(stdout_text + stderr_text)
-
-            return ExperimentResult(
-                experiment_id=experiment_id,
-                exit_code=proc.returncode or 0,
-                duration=time.monotonic() - start,
-                val_bpb=val_bpb,
-                stdout=stdout_text,
-                stderr=stderr_text,
-            )
-
-        except Exception as e:
-            return ExperimentResult(
-                experiment_id=experiment_id,
-                exit_code=-1,
-                duration=time.monotonic() - start,
-                stdout="\n".join(stdout_lines),
-                stderr="\n".join(stderr_lines),
-                error=str(e),
-            )
+        return ExperimentResult(
+            experiment_id=experiment_id,
+            exit_code=result.exit_code,
+            duration=time.monotonic() - start,
+            val_bpb=val_bpb,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            error=result.error,
+        )
 
     @staticmethod
     def _parse_val_bpb(output: str) -> float | None:

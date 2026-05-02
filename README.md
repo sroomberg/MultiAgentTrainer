@@ -74,7 +74,32 @@ Copy `config.example.yaml` to `multiagenttrainer.yaml` in your working directory
 |---------|-------------|
 | `autoresearch` | Autoresearch repo URL/path, branch, train time, optional `program.md` override |
 | `sources` | List of data sources to ingest |
-| `training` | Agent command, max experiments, output directory |
+| `training` | Agent command, max experiments, output directory, execution target |
+
+### Execution targets
+
+By default experiments run locally. Set `training.execution.type` to run on a remote host or inside a container instead.
+
+**SSH** — rsync the workspace to a remote machine and run experiments over SSH:
+
+```yaml
+training:
+  execution:
+    type: ssh
+    ssh_host: user@gpu-box.example.com   # required
+    ssh_key: ~/.ssh/id_ed25519           # optional; uses SSH default otherwise
+    remote_dir: /tmp/mat-runs            # base dir on the remote host
+```
+
+**Docker** — copy the workspace into a running container and exec commands inside it:
+
+```yaml
+training:
+  execution:
+    type: docker
+    container: my-training-container     # required; must already be running
+    container_dir: /tmp/mat-runs         # base dir inside the container
+```
 
 ### Source Types
 

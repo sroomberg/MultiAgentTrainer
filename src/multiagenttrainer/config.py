@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import yaml
 
@@ -30,6 +31,20 @@ class AutoresearchConfig:
 
 
 @dataclass
+class ExecutionConfig:
+    """Where and how to run experiments."""
+
+    type: Literal["local", "ssh", "docker"] = "local"
+    # SSH options
+    ssh_host: str | None = None
+    ssh_key: str | None = None  # path to private key; None = SSH default
+    remote_dir: str = "/tmp/mat-runs"
+    # Docker options
+    container: str | None = None
+    container_dir: str = "/tmp/mat-runs"
+
+
+@dataclass
 class TrainingConfig:
     """Settings for autonomous training runs."""
 
@@ -40,6 +55,7 @@ class TrainingConfig:
     )
     max_experiments: int = 50
     output_dir: str = "./training-runs"
+    execution: ExecutionConfig = field(default_factory=ExecutionConfig)
 
 
 @dataclass
@@ -78,10 +94,20 @@ def load_config(config_path: Path | None = None) -> TrainerConfig:
 
     # Training settings
     tr_data = data.get("training", {})
+    ex_data = tr_data.get("execution", {})
+    execution = ExecutionConfig(
+        type=ex_data.get("type", "local"),
+        ssh_host=ex_data.get("ssh_host"),
+        ssh_key=ex_data.get("ssh_key"),
+        remote_dir=ex_data.get("remote_dir", "/tmp/mat-runs"),
+        container=ex_data.get("container"),
+        container_dir=ex_data.get("container_dir", "/tmp/mat-runs"),
+    )
     training = TrainingConfig(
         agent_command=tr_data.get("agent_command", TrainingConfig.agent_command),
         max_experiments=tr_data.get("max_experiments", 50),
         output_dir=tr_data.get("output_dir", "./training-runs"),
+        execution=execution,
     )
 
     # Data sources
