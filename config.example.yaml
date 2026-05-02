@@ -1,0 +1,42 @@
+# MultiAgentTrainer configuration
+# Copy to multiagenttrainer.yaml in your working directory.
+
+autoresearch:
+  repo: "https://github.com/karpathy/autoresearch"  # or a local path
+  branch: "master"
+  train_time: 300       # seconds per experiment (default 5 min)
+  # program_md: ./my-program.md   # optional override for agent instructions
+
+sources:
+  # Local git repository
+  - type: local_repo
+    path: /home/user/my-project
+    include: ["**/*.py", "**/*.md"]
+    exclude: ["**/node_modules/**"]
+
+  # Any git-cloneable URL
+  - type: remote_repo
+    url: "https://github.com/user/repo.git"
+    branch: main
+
+  # GitHub repository (web URL)
+  - type: github_repo
+    url: "https://github.com/user/repo"
+
+  # All repos in a GitHub organisation
+  - type: github_org
+    url: "https://github.com/my-org"
+    max_repos: 50
+    visibility: all   # all | public | private
+
+  # AWS Bedrock knowledge base
+  - type: bedrock_knowledge_base
+    knowledge_base_id: "ABCDEF1234"
+    region: "us-east-1"
+    query: "training data for code generation"
+    max_results: 100
+
+training:
+  agent_command: 'claude -p {prompt} --allowedTools "Bash,Read,Edit" --permission-mode acceptEdits'
+  max_experiments: 50
+  output_dir: ./training-runs

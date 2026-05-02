@@ -1,0 +1,19 @@
+services:
+  mat:
+    build: .
+    volumes:
+      - ${WORKSPACE_PATH:-.}:/workspace
+      # Forward SSH agent for remote git clones
+      - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent
+      - ~/.ssh:/root/.ssh:ro
+    environment:
+      - SSH_AUTH_SOCK=/ssh-agent
+      # Pass API keys through
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - GITHUB_TOKEN
+      # AWS credentials for Bedrock
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN
+      - AWS_DEFAULT_REGION
