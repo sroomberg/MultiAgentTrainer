@@ -5,8 +5,12 @@ from __future__ import annotations
 import asyncio
 import shlex
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .config import ExecutionConfig
 
 
 @dataclass
@@ -91,7 +95,8 @@ class SSHExecutor(Executor):
 
     async def run(self, cmd: str, cwd: str, timeout: float) -> RunResult:
         remote_cmd = f"cd {shlex.quote(cwd)} && {cmd}"
-        ssh_cmd = ["ssh"] + (self._ssh_opts.split() if self._ssh_opts else []) + [self.host, remote_cmd]
+        ssh_args = self._ssh_opts.split() if self._ssh_opts else []
+        ssh_cmd = ["ssh", *ssh_args, self.host, remote_cmd]
         try:
             proc = await asyncio.create_subprocess_exec(
                 *ssh_cmd,
@@ -178,7 +183,7 @@ def _ssh_opts(key_path: str | None) -> str:
     return opts
 
 
-def build_executor(execution_cfg: "ExecutionConfig") -> Executor:  # noqa: F821
+def build_executor(execution_cfg: ExecutionConfig) -> Executor:
     """Construct the right Executor from config."""
     t = execution_cfg.type
     if t == "ssh":

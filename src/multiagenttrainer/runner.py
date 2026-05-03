@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 import shlex
@@ -110,10 +109,11 @@ class Runner:
 
         # Upload workspace to the execution target (no-op for LocalExecutor).
         exec_cfg = self.tr_cfg.execution
+        suffix = f"/{self.run_id}/autoresearch"
         if exec_cfg.type == "ssh":
-            remote_ar_dir = exec_cfg.remote_dir.rstrip("/") + f"/{self.run_id}/autoresearch"
+            remote_ar_dir = exec_cfg.remote_dir.rstrip("/") + suffix
         elif exec_cfg.type == "docker":
-            remote_ar_dir = exec_cfg.container_dir.rstrip("/") + f"/{self.run_id}/autoresearch"
+            remote_ar_dir = exec_cfg.container_dir.rstrip("/") + suffix
         else:
             remote_ar_dir = str(ar_dir)
 
