@@ -105,46 +105,33 @@ Model weights are pulled from HuggingFace on first boot. Expect 5–15 minutes b
 
 ## Running training
 
-`train.sh` is a self-contained script that sets up MultiAgentTrainer inside a container and runs it against the local vLLM server. SCP it to each host after `pulumi up`, then launch a training container:
+Training starts automatically on each host as part of `pulumi up` — no manual steps needed. The `user_data.sh` boot script builds the `mat-trainer` image (from `Dockerfile.trainer`) and starts a trainer container alongside the vLLM container. The trainer polls vLLM's `/health` endpoint and begins experiments once the model is loaded.
+
+To follow training logs on a host:
 
 ```bash
-# Get the host IPs
-pulumi stack output public_ips
-
-# Copy the script to a host
-scp deploy/train.sh ubuntu@HOST_IP:/home/ubuntu/train.sh
-
-# Start a training container on that host (over SSH)
-ssh ubuntu@HOST_IP docker run -d \
-  --name trainer \
-  --add-host host.docker.internal:host-gateway \
-  -v /home/ubuntu/train.sh:/train.sh \
-  -e MODEL_ENDPOINT=http://host.docker.internal:8000 \
-  -e MODEL_ID=meta-llama/Meta-Llama-3-8B-Instruct \
-  -e MAX_EXPERIMENTS=50 \
-  -e TRAIN_TIME=300 \
-  -e SOURCE_REPO=https://github.com/your-org/your-repo \
-  -v /home/ubuntu/training-output:/output \
-  python:3.12-slim bash /train.sh
-
-# Follow logs
 ssh ubuntu@HOST_IP docker logs -f trainer
 ```
 
-The script waits for vLLM to finish loading the model before starting experiments, so it's safe to launch it immediately after the instance boots.
+Configure training behaviour in `Pulumi.dev.yaml`:
 
-### Environment variables
+```yaml
+mat-model-infra:train_time: 300        # seconds per experiment
+mat-model-infra:max_experiments: 50
+mat-model-infra:source_repo: https://github.com/your-org/your-repo
+```
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `MODEL_ENDPOINT` | yes | — | vLLM base URL |
-| `MODEL_ID` | yes | — | HuggingFace model ID |
-| `TRAIN_TIME` | no | `300` | Seconds per experiment |
-| `MAX_EXPERIMENTS` | no | `50` | Number of experiments |
-| `OUTPUT_DIR` | no | `/output` | Results directory |
-| `SOURCE_REPO` | no | — | Git repo to use as training data source |
-| `MAT_REPO` | no | — | Install MultiAgentTrainer from this git URL instead of PyPI |
-| `GITHUB_TOKEN` | no | — | For private source repos |
+Results are written to `/home/ubuntu/training-output` on each host.
+
+### Trainer image
+
+`Dockerfile.trainer` pre-installs `mat` and `mat-query` at build time. `train.sh` is the entrypoint — at runtime it writes a `mat` config from environment variables and calls `mat`.
+
+| File | Role |
+|---|---|
+| `Dockerfile.trainer` | Image definition — installs deps at build time |
+| `train.sh` | Entrypoint — writes config, runs `mat` |
+| `mat-query` | Stdlib-only helper called by `agent_command` to hit the vLLM API |
 
 ## Teardown
 

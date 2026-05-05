@@ -1,22 +1,12 @@
 #!/bin/bash
-# Set up and run a MultiAgentTrainer training session against a local vLLM server.
-#
-# SCP this file to the EC2 host, then mount it into a training container:
-#
-#   scp deploy/train.sh ubuntu@HOST:/home/ubuntu/train.sh
-#   docker run -d \
-#     -v /home/ubuntu/train.sh:/train.sh \
-#     -e MODEL_ENDPOINT=http://host.docker.internal:8000 \
-#     -e MODEL_ID=meta-llama/Meta-Llama-3-8B-Instruct \
-#     --add-host host.docker.internal:host-gateway \
-#     python:3.12-slim bash /train.sh
+# Entrypoint for the trainer container.
+# Dependencies (mat, mat-query) are pre-installed in the image by Dockerfile.trainer.
 #
 # Required env vars:
 #   MODEL_ENDPOINT   vLLM base URL, e.g. http://host.docker.internal:8000
 #   MODEL_ID         HuggingFace model ID served at that endpoint
 #
 # Optional env vars:
-#   MAT_REPO         Git URL or local path for MultiAgentTrainer (default: PyPI release)
 #   SOURCE_REPO      Git URL to use as the training data source
 #   TRAIN_TIME       Seconds per experiment (default: 300)
 #   MAX_EXPERIMENTS  Number of experiments to run (default: 50)
@@ -32,53 +22,7 @@ MAX_EXPERIMENTS="${MAX_EXPERIMENTS:-50}"
 OUTPUT_DIR="${OUTPUT_DIR:-/output}"
 SOURCE_REPO="${SOURCE_REPO:-}"
 
-# ── dependencies ───────────────────────────────────────────────────────────────
-
-apt-get update -qq && apt-get install -y -qq git curl
-
-if ! command -v uv &>/dev/null; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.cargo/bin:$PATH"
-fi
-
-if [ -n "${MAT_REPO:-}" ]; then
-    uv tool install "git+${MAT_REPO}"
-else
-    uv tool install multiagenttrainer
-fi
-
-export PATH="$HOME/.local/bin:$PATH"
-
-# ── query helper ───────────────────────────────────────────────────────────────
-# Installed to /usr/local/bin so it's on PATH inside the agent_command subprocess.
-
-cat > /usr/local/bin/mat-query <<'PYEOF'
-#!/usr/bin/env python3
-"""Query a vLLM chat endpoint and print the reply. Usage: mat-query <endpoint> <model> <prompt>"""
-import json, sys, urllib.request, urllib.error
-
-endpoint, model, prompt = sys.argv[1], sys.argv[2], sys.argv[3]
-payload = json.dumps({
-    "model": model,
-    "messages": [{"role": "user", "content": prompt}],
-    "max_tokens": 4096,
-}).encode()
-req = urllib.request.Request(
-    f"{endpoint.rstrip('/')}/v1/chat/completions",
-    data=payload,
-    headers={"Content-Type": "application/json"},
-)
-try:
-    with urllib.request.urlopen(req, timeout=120) as r:
-        print(json.loads(r.read())["choices"][0]["message"]["content"])
-except urllib.error.HTTPError as e:
-    sys.exit(f"HTTP {e.code}: {e.read().decode()}")
-except OSError as e:
-    sys.exit(f"Connection error: {e}")
-PYEOF
-chmod +x /usr/local/bin/mat-query
-
-# ── wait for vLLM to be ready ──────────────────────────────────────────────────
+# ── wait for vLLM ─────────────────────────────────────────────────────────────
 
 echo "Waiting for vLLM at ${MODEL_ENDPOINT}..."
 until curl -sf "${MODEL_ENDPOINT}/health" &>/dev/null; do
@@ -86,10 +30,9 @@ until curl -sf "${MODEL_ENDPOINT}/health" &>/dev/null; do
 done
 echo "vLLM ready."
 
-# ── write config ───────────────────────────────────────────────────────────────
+# ── write config ──────────────────────────────────────────────────────────────
 
 mkdir -p "${OUTPUT_DIR}"
-
 CONFIG_FILE="$(mktemp /tmp/mat-XXXXXX.yaml)"
 
 if [ -n "${SOURCE_REPO}" ]; then
@@ -112,7 +55,7 @@ training:
 ${SOURCES_BLOCK}
 EOF
 
-# ── run ────────────────────────────────────────────────────────────────────────
+# ── run ───────────────────────────────────────────────────────────────────────
 
 echo "Starting training — model: ${MODEL_ID}, experiments: ${MAX_EXPERIMENTS}"
 mat --config "${CONFIG_FILE}"

@@ -30,4 +30,32 @@ docker run -d \
     --port {port} \
     --gpu-memory-utilization {gpu_memory_utilization}
 
-echo "vllm setup complete: {model_id}" > /var/log/mat-setup.log
+# ── trainer image ─────────────────────────────────────────────────────────────
+mkdir -p /opt/mat-trainer
+cat > /opt/mat-trainer/Dockerfile <<'DOCKERFILE'
+{dockerfile_trainer}
+DOCKERFILE
+cat > /opt/mat-trainer/train.sh <<'TRAINSH'
+{train_sh}
+TRAINSH
+cat > /opt/mat-trainer/mat-query <<'MATQUERY'
+{mat_query}
+MATQUERY
+
+docker build -t mat-trainer /opt/mat-trainer
+
+# ── trainer container ─────────────────────────────────────────────────────────
+# Starts immediately; train.sh polls /health until vLLM is ready.
+docker run -d \
+    --restart unless-stopped \
+    --name trainer \
+    --add-host host.docker.internal:host-gateway \
+    -e MODEL_ENDPOINT=http://host.docker.internal:{port} \
+    -e MODEL_ID={model_id} \
+    -e TRAIN_TIME={train_time} \
+    -e MAX_EXPERIMENTS={max_experiments} \
+    -e SOURCE_REPO={source_repo} \
+    -v /home/ubuntu/training-output:/output \
+    mat-trainer
+
+echo "setup complete: {model_id}" > /var/log/mat-setup.log

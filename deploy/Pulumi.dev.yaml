@@ -7,6 +7,9 @@ config:
   mat-model-infra:allowed_inference_cidrs:
     - "203.0.113.0/32"  # CHANGEME: IP of machine running agenttester
   # mat-model-infra:hf_token: set via: pulumi config set --secret mat-model-infra:hf_token <token>
+  mat-model-infra:train_time: 300
+  mat-model-infra:max_experiments: 50
+  # mat-model-infra:source_repo: https://github.com/your-org/your-repo
   mat-model-infra:models:
     - name: llama3
       model_id: meta-llama/Meta-Llama-3-8B-Instruct

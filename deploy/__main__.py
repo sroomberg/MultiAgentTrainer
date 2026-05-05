@@ -12,11 +12,14 @@ import pulumi_aws as aws
 # ── config ────────────────────────────────────────────────────────────────────
 
 config = pulumi.Config()
-default_instance_type = config.get("instance_type") or "g4dn.xlarge"
-ssh_pub_key_path = config.get("ssh_public_key_path") or "~/.ssh/id_ed25519.pub"
-allowed_ssh_cidrs       = config.require_object("allowed_ssh_cidrs")
+default_instance_type  = config.get("instance_type") or "g4dn.xlarge"
+ssh_pub_key_path       = config.get("ssh_public_key_path") or "~/.ssh/id_ed25519.pub"
+allowed_ssh_cidrs      = config.require_object("allowed_ssh_cidrs")
 allowed_inference_cidrs = config.get_object("allowed_inference_cidrs") or ["0.0.0.0/0"]
-hf_token = config.require_secret("hf_token")
+hf_token               = config.require_secret("hf_token")
+train_time             = config.get_int("train_time") or 300
+max_experiments        = config.get_int("max_experiments") or 50
+source_repo            = config.get("source_repo") or ""
 
 INFERENCE_PORT = 8000
 
@@ -101,7 +104,11 @@ instance_profile = aws.iam.InstanceProfile("mat-model-profile", role=role.name)
 
 # ── user data (templated per model) ───────────────────────────────────────────
 
-_user_data_template = (Path(__file__).parent / "user_data.sh").read_text()
+_deploy_dir = Path(__file__).parent
+_user_data_template   = (_deploy_dir / "user_data.sh").read_text()
+_dockerfile_trainer   = (_deploy_dir / "Dockerfile.trainer").read_text()
+_train_sh             = (_deploy_dir / "train.sh").read_text()
+_mat_query            = (_deploy_dir / "mat-query").read_text()
 
 
 def _user_data(model: ModelSpec, token: str) -> str:
@@ -110,6 +117,12 @@ def _user_data(model: ModelSpec, token: str) -> str:
         model_id=model.model_id,
         port=INFERENCE_PORT,
         gpu_memory_utilization=model.gpu_memory_utilization,
+        train_time=train_time,
+        max_experiments=max_experiments,
+        source_repo=source_repo,
+        dockerfile_trainer=_dockerfile_trainer,
+        train_sh=_train_sh,
+        mat_query=_mat_query,
     )
 
 
