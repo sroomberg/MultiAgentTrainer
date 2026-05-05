@@ -1,0 +1,21 @@
+config:
+  aws:region: us-east-1
+  mat-model-infra:instance_type: g4dn.xlarge  # default for all models
+  mat-model-infra:ssh_public_key_path: ~/.ssh/id_ed25519.pub
+  mat-model-infra:allowed_ssh_cidrs:
+    - "203.0.113.0/32"  # CHANGEME: your IP
+  mat-model-infra:allowed_inference_cidrs:
+    - "203.0.113.0/32"  # CHANGEME: IP of machine running agenttester
+  # mat-model-infra:hf_token: set via: pulumi config set --secret mat-model-infra:hf_token <token>
+  mat-model-infra:models:
+    - name: llama3
+      model_id: meta-llama/Meta-Llama-3-8B-Instruct
+    - name: mistral
+      model_id: mistralai/Mistral-7B-Instruct-v0.2
+    - name: qwen
+      model_id: Qwen/Qwen2.5-7B-Instruct
+    # Override instance type or GPU utilization per model:
+    # - name: llama3-70b
+    #   model_id: meta-llama/Meta-Llama-3-70B-Instruct
+    #   instance_type: g4dn.12xlarge
+    #   gpu_memory_utilization: 0.95
