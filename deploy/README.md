@@ -103,6 +103,49 @@ agents:
 
 Model weights are pulled from HuggingFace on first boot. Expect 5–15 minutes before the endpoint is ready depending on model size.
 
+## Running training
+
+`train.sh` is a self-contained script that sets up MultiAgentTrainer inside a container and runs it against the local vLLM server. SCP it to each host after `pulumi up`, then launch a training container:
+
+```bash
+# Get the host IPs
+pulumi stack output public_ips
+
+# Copy the script to a host
+scp deploy/train.sh ubuntu@HOST_IP:/home/ubuntu/train.sh
+
+# Start a training container on that host (over SSH)
+ssh ubuntu@HOST_IP docker run -d \
+  --name trainer \
+  --add-host host.docker.internal:host-gateway \
+  -v /home/ubuntu/train.sh:/train.sh \
+  -e MODEL_ENDPOINT=http://host.docker.internal:8000 \
+  -e MODEL_ID=meta-llama/Meta-Llama-3-8B-Instruct \
+  -e MAX_EXPERIMENTS=50 \
+  -e TRAIN_TIME=300 \
+  -e SOURCE_REPO=https://github.com/your-org/your-repo \
+  -v /home/ubuntu/training-output:/output \
+  python:3.12-slim bash /train.sh
+
+# Follow logs
+ssh ubuntu@HOST_IP docker logs -f trainer
+```
+
+The script waits for vLLM to finish loading the model before starting experiments, so it's safe to launch it immediately after the instance boots.
+
+### Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `MODEL_ENDPOINT` | yes | — | vLLM base URL |
+| `MODEL_ID` | yes | — | HuggingFace model ID |
+| `TRAIN_TIME` | no | `300` | Seconds per experiment |
+| `MAX_EXPERIMENTS` | no | `50` | Number of experiments |
+| `OUTPUT_DIR` | no | `/output` | Results directory |
+| `SOURCE_REPO` | no | — | Git repo to use as training data source |
+| `MAT_REPO` | no | — | Install MultiAgentTrainer from this git URL instead of PyPI |
+| `GITHUB_TOKEN` | no | — | For private source repos |
+
 ## Teardown
 
 ```bash
