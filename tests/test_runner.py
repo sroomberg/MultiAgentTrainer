@@ -25,6 +25,14 @@ class TestRunner:
         runner = Runner(AutoresearchConfig(), TrainingConfig())
         assert len(runner.run_id) == 8
 
+    def test_name_defaults_to_run_id(self) -> None:
+        runner = Runner(AutoresearchConfig(), TrainingConfig())
+        assert runner.name == runner.run_id
+
+    def test_name_is_set_when_provided(self) -> None:
+        runner = Runner(AutoresearchConfig(), TrainingConfig(), name="llama3")
+        assert runner.name == "llama3"
+
 
 class TestReport:
     def test_generate_report(self) -> None:

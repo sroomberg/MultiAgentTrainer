@@ -27,6 +27,14 @@ mat train
 # Run with overrides
 mat train --max-experiments 10 --output-dir ./my-runs
 
+# Label a run so it shows up clearly in mat watch
+mat train --name llama3
+
+# Run multiple models in parallel and watch progress live
+mat train --config llama3.yaml --name llama3 &
+mat train --config mistral.yaml --name mistral &
+mat watch
+
 # Check past training runs
 mat status
 ```
@@ -148,7 +156,7 @@ async def main():
     ingester.fetch_all()
     ingester.build_corpus(Path("corpus.txt"))
 
-    runner = Runner(cfg.autoresearch, cfg.training)
+    runner = Runner(cfg.autoresearch, cfg.training, name="my-run")
     workspace = runner.setup_workspace(Path("corpus.txt"))
     results = await runner.run_experiments(workspace)
     for r in results:

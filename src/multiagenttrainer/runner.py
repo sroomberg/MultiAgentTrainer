@@ -16,6 +16,7 @@ from rich.console import Console
 
 from .config import AutoresearchConfig, TrainingConfig
 from .executor import Executor, build_executor
+from .progress import new_progress, write_progress
 
 log = logging.getLogger(__name__)
 
@@ -42,12 +43,14 @@ class Runner:
         training_cfg: TrainingConfig,
         console: Console | None = None,
         executor: Executor | None = None,
+        name: str = "",
     ) -> None:
         self.ar_cfg = autoresearch_cfg
         self.tr_cfg = training_cfg
         self.console = console or Console()
         self.run_id = uuid.uuid4().hex[:8]
         self.executor: Executor = executor or build_executor(training_cfg.execution)
+        self.name = name or self.run_id
 
     def setup_workspace(self, corpus_path: Path | None = None) -> Path:
         """Clone or copy autoresearch into a working directory.
@@ -102,6 +105,11 @@ class Runner:
         ar_dir = workspace / "autoresearch"
         results: list[ExperimentResult] = []
 
+        output_dir = Path(self.tr_cfg.output_dir).resolve()
+        progress_path = output_dir / f"progress-{self.run_id}.json"
+        progress = new_progress(self.run_id, self.name, self.tr_cfg.max_experiments)
+        write_progress(progress_path, progress)
+
         self.console.print(
             f"\n[bold]Starting run [cyan]{self.run_id}[/cyan] "
             f"— max {self.tr_cfg.max_experiments} experiments[/bold]\n"
@@ -118,9 +126,7 @@ class Runner:
             remote_ar_dir = str(ar_dir)
 
         if exec_cfg.type in ("ssh", "docker"):
-            self.console.print(
-                f"  [dim]Uploading workspace → {remote_ar_dir}…[/dim]"
-            )
+            self.console.print(f"  [dim]Uploading workspace → {remote_ar_dir}…[/dim]")
             await self.executor.upload(ar_dir, remote_ar_dir)
             self.console.print("  [dim]Upload complete[/dim]")
 
@@ -144,11 +150,25 @@ class Runner:
                 + (f" ({result.error})" if result.error else "")
             )
 
+            progress.experiments.append(
+                {
+                    "experiment_id": result.experiment_id,
+                    "exit_code": result.exit_code,
+                    "duration": result.duration,
+                    "val_bpb": result.val_bpb,
+                    "error": result.error,
+                }
+            )
+            write_progress(progress_path, progress)
+
             # After the first experiment, subsequent prompts continue iteration.
             prompt = (
                 "Great, let's kick off the next experiment. "
                 "Review the results so far and try something new."
             )
+
+        progress.status = "done"
+        write_progress(progress_path, progress)
 
         return results
 

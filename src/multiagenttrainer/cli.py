@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.live import Live
+from rich.table import Table
 
 from .config import load_config
 from .ingest import Ingester
+from .progress import find_progress_files, read_progress
 from .report import generate_report, save_report
 from .runner import Runner
 
@@ -36,6 +40,10 @@ def train(
         Path | None,
         typer.Option("--output-dir", "-o", help="Override output directory"),
     ] = None,
+    name: Annotated[
+        str,
+        typer.Option("--name", help="Label for this run (shown in mat watch)"),
+    ] = "",
 ) -> None:
     """Run the full pipeline: ingest sources → prepare corpus → train."""
     cfg = load_config(config)
@@ -66,7 +74,7 @@ def train(
             corpus_path = None
 
     # Setup and run
-    runner = Runner(cfg.autoresearch, cfg.training, console)
+    runner = Runner(cfg.autoresearch, cfg.training, console, name=name)
     workspace = runner.setup_workspace(corpus_path)
 
     results = asyncio.run(runner.run_experiments(workspace))
@@ -126,6 +134,72 @@ def ingest_cmd(
     corpus_path = output or (staging / "corpus.txt")
     count = ingester.build_corpus(corpus_path)
     console.print(f"\n[bold]Done:[/bold] {count} files ingested → {corpus_path}")
+
+
+@app.command("watch")
+def watch(
+    output_dir: Annotated[
+        Path | None,
+        typer.Option("--output-dir", "-o", help="Training runs directory"),
+    ] = None,
+    interval: Annotated[
+        float,
+        typer.Option("--interval", "-i", help="Refresh interval in seconds"),
+    ] = 2.0,
+) -> None:
+    """Live dashboard showing progress across all active training runs."""
+    runs_dir = (output_dir or Path("./training-runs")).resolve()
+
+    def _fmt(val: float | None) -> str:
+        return f"{val:.4f}" if val is not None else "—"
+
+    def _build_table() -> Table:
+        table = Table(box=None, pad_edge=False, show_header=True)
+        table.add_column("Name", style="bold")
+        table.add_column("Run ID", style="dim")
+        table.add_column("Progress", justify="right")
+        table.add_column("Best val_bpb", justify="right")
+        table.add_column("Last val_bpb", justify="right")
+        table.add_column("Status")
+
+        paths = find_progress_files(runs_dir) if runs_dir.exists() else []
+        if not paths:
+            table.add_row("[dim]No active runs found.[/dim]", "", "", "", "", "")
+            return table
+
+        for path in paths:
+            p = read_progress(path)
+            if p is None:
+                continue
+            progress_str = f"{p.current_experiment} / {p.max_experiments}"
+            status_str = (
+                "[green]done[/green]"
+                if p.status == "done"
+                else "[yellow]running…[/yellow]"
+            )
+            table.add_row(
+                p.name,
+                p.run_id,
+                progress_str,
+                _fmt(p.best_val_bpb),
+                _fmt(p.last_val_bpb),
+                status_str,
+            )
+        return table
+
+    try:
+        with Live(_build_table(), refresh_per_second=1, screen=False) as live:
+            while True:
+                time.sleep(interval)
+                live.update(_build_table())
+                paths = find_progress_files(runs_dir) if runs_dir.exists() else []
+                if paths and all(
+                    (p := read_progress(path)) is not None and p.status != "running"
+                    for path in paths
+                ):
+                    break
+    except KeyboardInterrupt:
+        pass
 
 
 @app.command("status")

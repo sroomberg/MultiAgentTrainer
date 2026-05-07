@@ -131,7 +131,12 @@ class DockerExecutor(Executor):
     async def upload(self, local_dir: Path, remote_dir: str) -> None:
         # Ensure destination directory exists in the container.
         mkdir_proc = await asyncio.create_subprocess_exec(
-            "docker", "exec", self.container, "mkdir", "-p", remote_dir,
+            "docker",
+            "exec",
+            self.container,
+            "mkdir",
+            "-p",
+            remote_dir,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -139,7 +144,10 @@ class DockerExecutor(Executor):
 
         src = str(local_dir).rstrip("/") + "/."
         proc = await asyncio.create_subprocess_exec(
-            "docker", "cp", src, f"{self.container}:{remote_dir}",
+            "docker",
+            "cp",
+            src,
+            f"{self.container}:{remote_dir}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
