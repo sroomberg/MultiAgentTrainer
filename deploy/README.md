@@ -82,13 +82,13 @@ The snippet looks like:
 ```yaml
 agents:
   llama3:
-    command: 'python scripts/query_model.py http://1.2.3.4:8000 meta-llama/Meta-Llama-3-8B-Instruct {prompt}'
+    command: 'agenttester query http://1.2.3.4:8000 meta-llama/Meta-Llama-3-8B-Instruct {prompt}'
     host: localhost
     commit_style: manual
     timeout: 120
 
   mistral:
-    command: 'python scripts/query_model.py http://5.6.7.8:8000 mistralai/Mistral-7B-Instruct-v0.2 {prompt}'
+    command: 'agenttester query http://5.6.7.8:8000 mistralai/Mistral-7B-Instruct-v0.2 {prompt}'
     host: localhost
     commit_style: manual
     timeout: 120

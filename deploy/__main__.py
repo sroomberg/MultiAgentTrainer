@@ -172,7 +172,7 @@ pulumi.export(
         lambda ips: "\n".join(
             textwrap.dedent(f"""\
                   {m.name}:
-                    command: 'python scripts/query_model.py http://{ip}:{INFERENCE_PORT} {m.model_id} {{prompt}}'
+                    command: 'agenttester query http://{ip}:{INFERENCE_PORT} {m.model_id} {{prompt}}'
                     host: localhost
                     commit_style: manual
                     timeout: 120""")
