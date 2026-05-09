@@ -1,7 +1,5 @@
 # MultiAgentTrainer
 
-> **⚠️ Experimental** — This project is under active development. APIs, config format, and CLI flags may change without notice.
-
 Collect data from multiple sources, run autonomous LLM training experiments using [autoresearch](https://github.com/karpathy/autoresearch), and fine-tune open-source or managed models on your corpus. Configure everything in a YAML file and let `mat` handle ingestion, corpus building, training, and fine-tuning.
 
 MultiAgentTrainer can be used standalone, but is designed as a companion to [AgentTester](https://github.com/sroomberg/agenttester) — use AgentTester to evaluate and compare coding agents, then use MultiAgentTrainer to train models on the data those agents produce and consume.
