@@ -22,6 +22,9 @@ class OpenSourceConfig:
     gradient_accumulation_steps: int = 4
     use_4bit: bool = True
     target_modules: list[str] = field(default_factory=lambda: ["q_proj", "v_proj"])
+    packing: bool = True
+    use_bf16: bool = False
+    use_flash_attention: bool = False
 
 
 @dataclass

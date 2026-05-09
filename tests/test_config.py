@@ -73,6 +73,31 @@ finetuner:
     assert cfg.finetuner.opensource.num_epochs == 5
     assert cfg.finetuner.opensource.use_4bit is False
     assert cfg.finetuner.opensource.lora_r == 8
+    # defaults for speed fields
+    assert cfg.finetuner.opensource.packing is True
+    assert cfg.finetuner.opensource.use_bf16 is False
+    assert cfg.finetuner.opensource.use_flash_attention is False
+
+
+def test_finetuner_opensource_speed_fields_parsed(tmp_path: Path) -> None:
+    """packing / use_bf16 / use_flash_attention are parsed from YAML."""
+    cfg_file = tmp_path / "multiagenttrainer.yaml"
+    cfg_file.write_text(
+        """\
+finetuner:
+  backend: opensource
+  opensource:
+    model_id: test/model
+    packing: false
+    use_bf16: true
+    use_flash_attention: true
+"""
+    )
+    cfg = load_config(cfg_file)
+    os_cfg = cfg.finetuner.opensource  # type: ignore[union-attr]
+    assert os_cfg.packing is False
+    assert os_cfg.use_bf16 is True
+    assert os_cfg.use_flash_attention is True
 
 
 def test_finetuner_bedrock_parsed(tmp_path: Path) -> None:

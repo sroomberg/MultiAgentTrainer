@@ -62,6 +62,9 @@ finetuner:
     gradient_accumulation_steps: 4
     use_4bit: true                        # QLoRA (requires bitsandbytes + CUDA)
     target_modules: [q_proj, v_proj]      # or omit to use "all-linear"
+    packing: true                         # bin chunks together to eliminate padding waste
+    use_bf16: false                       # bf16 precision — recommended on Ampere+ (A100, RTX 30xx+)
+    use_flash_attention: false            # Flash Attention 2 — requires: pip install flash-attn
 
   # AWS Bedrock model customization
   bedrock:

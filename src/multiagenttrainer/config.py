@@ -149,6 +149,9 @@ def _parse_finetuner_config(data: dict[str, object]) -> FineTunerConfig:
         gradient_accumulation_steps=os_data.get("gradient_accumulation_steps", 4),  # type: ignore[arg-type]
         use_4bit=os_data.get("use_4bit", True),  # type: ignore[arg-type]
         target_modules=os_data.get("target_modules", ["q_proj", "v_proj"]),  # type: ignore[arg-type]
+        packing=os_data.get("packing", True),  # type: ignore[arg-type]
+        use_bf16=os_data.get("use_bf16", False),  # type: ignore[arg-type]
+        use_flash_attention=os_data.get("use_flash_attention", False),  # type: ignore[arg-type]
     )
 
     br_data = data.get("bedrock", {})

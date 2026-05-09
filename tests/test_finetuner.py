@@ -331,6 +331,159 @@ def test_os_start_job_success(
 
 
 # ---------------------------------------------------------------------------
+# OpenSourceFineTuner — speed optimisations (packing / bf16 / flash attn)
+# ---------------------------------------------------------------------------
+
+
+class _HFMocks:
+    """Holds the key mock objects from a _run_start_job call."""
+
+    def __init__(
+        self,
+        from_pretrained: MagicMock,
+        training_args_cls: MagicMock,
+        sft_trainer_cls: MagicMock,
+        torch: MagicMock,
+        bnb_config_cls: MagicMock,
+    ) -> None:
+        self.from_pretrained = from_pretrained
+        self.training_args_cls = training_args_cls
+        self.sft_trainer_cls = sft_trainer_cls
+        self.torch = torch
+        self.bnb_config_cls = bnb_config_cls
+
+
+def _run_start_job(tuner: OpenSourceFineTuner) -> tuple[FineTuneJob, _HFMocks]:
+    """Run start_job with a fully mocked HF stack and return (job, mocks)."""
+    mock_train_result = MagicMock()
+    mock_train_result.metrics = {}
+
+    mock_trainer = MagicMock()
+    mock_trainer.train.return_value = mock_train_result
+
+    mock_sft_trainer_cls = MagicMock(return_value=mock_trainer)
+    mock_training_args_cls = MagicMock(return_value=MagicMock())
+    mock_from_pretrained = MagicMock(return_value=MagicMock())
+    mock_bnb_config_cls = MagicMock(return_value=MagicMock())
+
+    mock_tokenizer = MagicMock()
+    mock_tokenizer.pad_token = None
+    mock_tokenizer.eos_token = "<eos>"
+
+    mock_torch = MagicMock()
+    mock_torch.float16 = "float16"
+    mock_torch.bfloat16 = "bfloat16"
+
+    mock_transformers = MagicMock()
+    mock_transformers.AutoModelForCausalLM.from_pretrained = mock_from_pretrained
+    mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tokenizer
+    mock_transformers.BitsAndBytesConfig = mock_bnb_config_cls
+    mock_transformers.TrainingArguments = mock_training_args_cls
+
+    mock_peft = MagicMock()
+    mock_peft.get_peft_model.return_value = MagicMock()
+
+    mock_trl = MagicMock()
+    mock_trl.SFTTrainer = mock_sft_trainer_cls
+
+    fake_modules = {
+        "torch": mock_torch,
+        "transformers": mock_transformers,
+        "peft": mock_peft,
+        "trl": mock_trl,
+        "datasets": MagicMock(),
+        "bitsandbytes": MagicMock(),
+    }
+    with patch.dict("sys.modules", fake_modules):
+        job = tuner.start_job(["chunk one", "chunk two"], "test")
+
+    return job, _HFMocks(
+        from_pretrained=mock_from_pretrained,
+        training_args_cls=mock_training_args_cls,
+        sft_trainer_cls=mock_sft_trainer_cls,
+        torch=mock_torch,
+        bnb_config_cls=mock_bnb_config_cls,
+    )
+
+
+def test_os_describe_shows_precision_and_packing(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, use_bf16=False, packing=True)
+    tuner = OpenSourceFineTuner(cfg, jobs_dir, console)
+    desc = tuner.describe()
+    assert "fp16" in desc
+    assert "packed" in desc
+    assert "bf16" not in desc
+    assert "Flash" not in desc
+
+
+def test_os_describe_all_optimisations(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(
+        model_id="m",
+        use_4bit=True,
+        use_bf16=True,
+        use_flash_attention=True,
+        packing=True,
+    )
+    tuner = OpenSourceFineTuner(cfg, jobs_dir, console)
+    desc = tuner.describe()
+    assert "QLoRA" in desc
+    assert "bf16" in desc
+    assert "Flash Attn 2" in desc
+    assert "packed" in desc
+
+
+def test_os_start_job_packing_true(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, packing=True)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.sft_trainer_cls.call_args
+    assert kwargs["packing"] is True
+
+
+def test_os_start_job_packing_false(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, packing=False)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.sft_trainer_cls.call_args
+    assert kwargs["packing"] is False
+
+
+def test_os_start_job_bf16_sets_training_args(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, use_bf16=True)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.training_args_cls.call_args
+    assert kwargs["bf16"] is True
+    assert kwargs["fp16"] is False
+
+
+def test_os_start_job_no_bf16_sets_fp16(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, use_bf16=False)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.training_args_cls.call_args
+    assert kwargs["bf16"] is False
+    assert kwargs["fp16"] is True
+
+
+def test_os_start_job_bf16_sets_bnb_compute_dtype(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=True, use_bf16=True)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.bnb_config_cls.call_args
+    assert kwargs["bnb_4bit_compute_dtype"] == mocks.torch.bfloat16
+
+
+def test_os_start_job_flash_attention_sets_attn_impl(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, use_flash_attention=True)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.from_pretrained.call_args
+    assert kwargs.get("attn_implementation") == "flash_attention_2"
+
+
+def test_os_start_job_no_flash_attention_omits_attn_impl(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, use_flash_attention=False)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.from_pretrained.call_args
+    assert "attn_implementation" not in kwargs
+
+
+# ---------------------------------------------------------------------------
 # BedrockFineTuner
 # ---------------------------------------------------------------------------
 

@@ -108,8 +108,13 @@ class OpenSourceFineTuner(FineTuner):
         self.cfg = cfg
 
     def describe(self) -> str:
-        quant = "QLoRA (4-bit)" if self.cfg.use_4bit else "LoRA (fp16)"
-        return f"OpenSource / {quant} — {self.cfg.model_id}"
+        parts = ["QLoRA (4-bit)" if self.cfg.use_4bit else "LoRA"]
+        parts.append("bf16" if self.cfg.use_bf16 else "fp16")
+        if self.cfg.use_flash_attention:
+            parts.append("Flash Attn 2")
+        if self.cfg.packing:
+            parts.append("packed")
+        return f"OpenSource / {', '.join(parts)} — {self.cfg.model_id}"
 
     def prepare_dataset(self, corpus_path: Path) -> list[str]:
         """Chunk corpus into text samples sized for the configured sequence length."""
@@ -152,20 +157,27 @@ class OpenSourceFineTuner(FineTuner):
         try:
             self.console.print(f"[bold]Loading model:[/bold] {self.cfg.model_id}")
 
+            compute_dtype = torch.bfloat16 if self.cfg.use_bf16 else torch.float16
+
             bnb_config = None
             if self.cfg.use_4bit:
                 bnb_config = BitsAndBytesConfig(
                     load_in_4bit=True,
                     bnb_4bit_quant_type="nf4",
-                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_compute_dtype=compute_dtype,
                     bnb_4bit_use_double_quant=True,
                 )
 
-            model = AutoModelForCausalLM.from_pretrained(
-                self.cfg.model_id,
+            model_kwargs: dict[str, Any] = dict(
                 quantization_config=bnb_config,
                 device_map="auto",
                 trust_remote_code=True,
+            )
+            if self.cfg.use_flash_attention:
+                model_kwargs["attn_implementation"] = "flash_attention_2"
+
+            model = AutoModelForCausalLM.from_pretrained(
+                self.cfg.model_id, **model_kwargs
             )
             tokenizer = AutoTokenizer.from_pretrained(
                 self.cfg.model_id, trust_remote_code=True
@@ -195,8 +207,8 @@ class OpenSourceFineTuner(FineTuner):
                 per_device_train_batch_size=self.cfg.batch_size,
                 gradient_accumulation_steps=self.cfg.gradient_accumulation_steps,
                 learning_rate=self.cfg.learning_rate,
-                fp16=not self.cfg.use_4bit,
-                bf16=False,
+                bf16=self.cfg.use_bf16,
+                fp16=not self.cfg.use_bf16 and not self.cfg.use_4bit,
                 logging_steps=10,
                 save_strategy="epoch",
                 report_to="none",
@@ -209,6 +221,7 @@ class OpenSourceFineTuner(FineTuner):
                 dataset_text_field="text",
                 max_seq_length=self.cfg.max_seq_length,
                 tokenizer=tokenizer,
+                packing=self.cfg.packing,
             )
 
             self.console.print("[bold]Training…[/bold]")
