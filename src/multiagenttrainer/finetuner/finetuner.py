@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 import json
+import os
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -155,6 +156,11 @@ class OpenSourceFineTuner(FineTuner):
 
         try:
             self.console.print(f"[bold]Loading model:[/bold] {self.cfg.model_id}")
+
+            token = self.cfg.hf_token or os.environ.get("HF_TOKEN")
+            if token:
+                from huggingface_hub import login
+                login(token=token, add_to_git_credential=False)
 
             compute_dtype = torch.bfloat16 if self.cfg.use_bf16 else torch.float16
 

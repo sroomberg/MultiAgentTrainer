@@ -30,6 +30,7 @@ class OpenSourceConfig:
     packing: bool = False
     use_bf16: bool = True
     use_flash_attention: bool = False
+    hf_token: str | None = None
 
 
 @dataclass
