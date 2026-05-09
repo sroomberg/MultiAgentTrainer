@@ -40,3 +40,38 @@ training:
   agent_command: 'claude -p {prompt} --allowedTools "Bash,Read,Edit" --permission-mode acceptEdits'
   max_experiments: 50
   output_dir: ./training-runs
+
+# Fine-tuning configuration (optional)
+# Run: mat finetune start
+finetuner:
+  backend: opensource   # opensource | bedrock
+  jobs_dir: ./finetune-jobs
+
+  # Open-source: HuggingFace + PEFT/LoRA
+  # Requires: pip install 'multiagenttrainer[opensource]'
+  opensource:
+    model_id: meta-llama/Llama-3.2-1B
+    output_dir: ./finetuned-models
+    lora_r: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+    max_seq_length: 2048
+    num_epochs: 3
+    batch_size: 4
+    learning_rate: 2e-4
+    gradient_accumulation_steps: 4
+    use_4bit: true                        # QLoRA (requires bitsandbytes + CUDA)
+    target_modules: [q_proj, v_proj]      # or omit to use "all-linear"
+
+  # AWS Bedrock model customization
+  bedrock:
+    base_model_id: amazon.titan-text-lite-v1
+    region: us-east-1
+    role_arn: arn:aws:iam::123456789012:role/BedrockFineTuningRole
+    output_s3_uri: s3://my-bucket/finetuned-models/
+    training_data_s3_uri: s3://my-bucket/training-data/
+    customization_type: CONTINUED_PRE_TRAINING  # CONTINUED_PRE_TRAINING | FINE_TUNING
+    epochs: 1
+    batch_size: 8
+    learning_rate: 1e-5
+    job_name_prefix: mat-finetune

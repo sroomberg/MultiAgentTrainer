@@ -2,7 +2,7 @@
 
 > **⚠️ Experimental** — This project is under active development. APIs, config format, and CLI flags may change without notice.
 
-Collect data from multiple sources and run autonomous LLM training experiments using [autoresearch](https://github.com/karpathy/autoresearch). Configure your data sources in a YAML file, and `mat` handles ingestion, corpus building, and launching autonomous training runs.
+Collect data from multiple sources, run autonomous LLM training experiments using [autoresearch](https://github.com/karpathy/autoresearch), and fine-tune open-source or managed models on your corpus. Configure everything in a YAML file and let `mat` handle ingestion, corpus building, training, and fine-tuning.
 
 MultiAgentTrainer can be used standalone, but is designed as a companion to [AgentTester](https://github.com/sroomberg/agenttester) — use AgentTester to evaluate and compare coding agents, then use MultiAgentTrainer to train models on the data those agents produce and consume.
 
@@ -10,6 +10,9 @@ MultiAgentTrainer can be used standalone, but is designed as a companion to [Age
 
 ```bash
 uv pip install -e ".[dev]"
+
+# For open-source fine-tuning (HuggingFace + PEFT/LoRA):
+uv pip install -e ".[opensource]"
 ```
 
 ## Quick Start
@@ -119,6 +122,90 @@ training:
 | `github_org` | `url` | `max_repos`, `visibility`, `name` |
 | `bedrock_knowledge_base` | `knowledge_base_id` | `region`, `query`, `max_results`, `name` |
 
+## Fine-Tuning
+
+Fine-tune models directly on your ingested corpus using `mat finetune`. Two backends are supported today; more can be added by subclassing `FineTuner`.
+
+### Open-source models (HuggingFace + LoRA/QLoRA)
+
+Requires a local GPU and `pip install 'multiagenttrainer[opensource]'`.
+
+```yaml
+# multiagenttrainer.yaml
+finetuner:
+  backend: opensource
+  jobs_dir: ./finetune-jobs
+  opensource:
+    model_id: meta-llama/Llama-3.2-1B
+    output_dir: ./finetuned-models
+    lora_r: 16
+    lora_alpha: 32
+    num_epochs: 3
+    batch_size: 4
+    use_4bit: true          # QLoRA — requires bitsandbytes + CUDA
+```
+
+```bash
+# Ingest sources first (or skip if you already have a corpus)
+mat ingest
+
+# Fine-tune on the ingested corpus
+mat finetune start
+
+# Or point at an arbitrary corpus file
+mat finetune start --corpus /path/to/corpus.txt --name my-run
+
+# List all jobs
+mat finetune list
+
+# Check a job
+mat finetune status <job-id>
+```
+
+Training runs in-process and blocks until complete. The LoRA adapter and tokenizer are saved to `output_dir/<job-id>/`.
+
+### AWS Bedrock model customization
+
+Uses your existing `boto3` credentials. Submits a Bedrock customization job and returns immediately — poll with `mat finetune status`.
+
+```yaml
+finetuner:
+  backend: bedrock
+  jobs_dir: ./finetune-jobs
+  bedrock:
+    base_model_id: amazon.titan-text-lite-v1
+    region: us-east-1
+    role_arn: arn:aws:iam::123456789012:role/BedrockFineTuningRole
+    output_s3_uri: s3://my-bucket/finetuned-models/
+    training_data_s3_uri: s3://my-bucket/training-data/
+    customization_type: CONTINUED_PRE_TRAINING   # or FINE_TUNING
+    epochs: 1
+```
+
+```bash
+mat finetune start
+mat finetune status <job-arn>
+mat finetune cancel <job-arn>
+```
+
+### Adding a new backend
+
+Subclass `FineTuner`, implement the four abstract methods, add a config dataclass, and register it in `finetuner/registry.py`:
+
+```python
+# finetuner/finetuner.py
+class AnthropicFineTuner(FineTuner):
+    def prepare_dataset(self, corpus_path): ...
+    def start_job(self, dataset, job_name): ...
+    def get_status(self, job_id): ...
+    def cancel_job(self, job_id): ...
+    def describe(self): ...
+
+# finetuner/registry.py
+if cfg.backend == "anthropic":
+    return AnthropicFineTuner(cfg.anthropic, jobs_dir, console)
+```
+
 ## How It Works
 
 1. **Ingest** — Fetch data from all configured sources (clone repos, query Bedrock KBs)
@@ -126,6 +213,7 @@ training:
 3. **Setup** — Clone autoresearch, inject the corpus, optionally override `program.md`
 4. **Train** — Launch the agent command iteratively for up to `max_experiments` rounds
 5. **Report** — Generate a markdown report with experiment results, best `val_bpb`, and stats
+6. **Fine-tune** *(optional)* — Run `mat finetune start` to fine-tune a model on the same corpus
 
 ## Development
 

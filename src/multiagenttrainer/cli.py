@@ -13,6 +13,7 @@ from rich.live import Live
 from rich.table import Table
 
 from .config import load_config
+from .finetuner import FineTuneJob, create_fine_tuner
 from .ingest import Ingester
 from .progress import find_progress_files, read_progress
 from .report import generate_report, save_report
@@ -23,6 +24,12 @@ app = typer.Typer(
     help="Multi-source data collection and autonomous LLM training.",
     no_args_is_help=True,
 )
+finetune_app = typer.Typer(
+    name="finetune",
+    help="Fine-tune models on collected corpus data.",
+    no_args_is_help=True,
+)
+app.add_typer(finetune_app, name="finetune")
 console = Console()
 
 
@@ -227,3 +234,153 @@ def status(
         size = report.stat().st_size
         console.print(f"  [bold]{run_id}[/bold]  {report.name} ({size} bytes)")
     console.print()
+
+
+# ---------------------------------------------------------------------------
+# mat finetune …
+# ---------------------------------------------------------------------------
+
+
+def _require_finetuner_config(config: Path | None) -> "tuple":
+    cfg = load_config(config)
+    if cfg.finetuner is None:
+        console.print(
+            "[red]No [bold]finetuner[/bold] section found in config. "
+            "Add one to your multiagenttrainer.yaml.[/red]"
+        )
+        raise typer.Exit(1)
+    return cfg, create_fine_tuner(cfg.finetuner, console)
+
+
+def _print_job(job: FineTuneJob) -> None:
+    console.print(f"  [bold]Job ID:[/bold]  {job.job_id}")
+    console.print(f"  [bold]Backend:[/bold] {job.backend}")
+    console.print(f"  [bold]Model:[/bold]   {job.model}")
+    console.print(f"  [bold]Status:[/bold]  {job.status}")
+    console.print(f"  [bold]Created:[/bold] {job.created_at[:19]}")
+    if job.output_model:
+        console.print(f"  [bold]Output:[/bold]  {job.output_model}")
+    if job.metrics:
+        console.print("  [bold]Metrics:[/bold]")
+        for k, v in job.metrics.items():
+            console.print(f"    {k}: {v:.4f}")
+    if job.error:
+        console.print(f"  [red]Error:[/red] {job.error}")
+
+
+@finetune_app.command("start")
+def finetune_start(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to config YAML"),
+    ] = None,
+    corpus: Annotated[
+        Path | None,
+        typer.Option("--corpus", help="Path to corpus file (defaults to last ingest output)"),
+    ] = None,
+    name: Annotated[
+        str,
+        typer.Option("--name", help="Human-readable label for this job"),
+    ] = "finetune",
+) -> None:
+    """Prepare dataset from corpus and start a fine-tuning job."""
+    cfg, tuner = _require_finetuner_config(config)
+
+    if corpus is None:
+        default_corpus = Path(cfg.training.output_dir).resolve() / ".staging" / "corpus.txt"
+        if default_corpus.exists():
+            corpus = default_corpus
+        else:
+            console.print(
+                "[red]No corpus found. Run [bold]mat ingest[/bold] first "
+                "or pass [bold]--corpus[/bold].[/red]"
+            )
+            raise typer.Exit(1)
+
+    console.print(f"\n[bold]Backend:[/bold] {tuner.describe()}")
+    console.print(f"[bold]Corpus:[/bold]  {corpus}\n")
+
+    console.print("[bold]Preparing dataset…[/bold]")
+    dataset = tuner.prepare_dataset(corpus)
+
+    console.print("\n[bold]Starting fine-tuning job…[/bold]")
+    job = tuner.start_job(dataset, name)
+
+    console.print()
+    _print_job(job)
+
+
+@finetune_app.command("status")
+def finetune_status(
+    job_id: Annotated[str, typer.Argument(help="Job ID to check")],
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to config YAML"),
+    ] = None,
+) -> None:
+    """Check the status of a fine-tuning job."""
+    _, tuner = _require_finetuner_config(config)
+    job = tuner.get_status(job_id)
+    console.print()
+    _print_job(job)
+
+
+@finetune_app.command("cancel")
+def finetune_cancel(
+    job_id: Annotated[str, typer.Argument(help="Job ID to cancel")],
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to config YAML"),
+    ] = None,
+) -> None:
+    """Cancel a running fine-tuning job."""
+    _, tuner = _require_finetuner_config(config)
+    tuner.cancel_job(job_id)
+    console.print(f"[green]Cancelled:[/green] {job_id}")
+
+
+@finetune_app.command("list")
+def finetune_list(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to config YAML"),
+    ] = None,
+) -> None:
+    """List all fine-tuning jobs."""
+    cfg = load_config(config)
+    if cfg.finetuner is None:
+        console.print("[dim]No finetuner configured.[/dim]")
+        return
+
+    jobs = FineTuneJob.list_all(Path(cfg.finetuner.jobs_dir))
+    if not jobs:
+        console.print("[dim]No fine-tuning jobs found.[/dim]")
+        return
+
+    table = Table(box=None, pad_edge=False, show_header=True)
+    table.add_column("Job ID")
+    table.add_column("Backend")
+    table.add_column("Model")
+    table.add_column("Status")
+    table.add_column("Created")
+    table.add_column("Output")
+
+    status_styles = {
+        "running": "[yellow]running[/yellow]",
+        "completed": "[green]completed[/green]",
+        "failed": "[red]failed[/red]",
+        "cancelled": "[dim]cancelled[/dim]",
+    }
+
+    for job in jobs:
+        short_id = job.job_id if len(job.job_id) <= 48 else job.job_id[:45] + "…"
+        table.add_row(
+            short_id,
+            job.backend,
+            job.model,
+            status_styles.get(job.status, job.status),
+            job.created_at[:19],
+            job.output_model or "—",
+        )
+
+    console.print(table)

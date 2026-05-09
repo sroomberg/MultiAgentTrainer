@@ -10,6 +10,8 @@ from multiagenttrainer.config import (
     TrainingConfig,
     load_config,
 )
+from multiagenttrainer.finetuner import BedrockFineTuner, OpenSourceFineTuner
+from multiagenttrainer.finetuner.config import FineTunerConfig
 
 
 def test_load_defaults() -> None:
@@ -40,3 +42,62 @@ def test_training_defaults() -> None:
     tc = TrainingConfig()
     assert tc.max_experiments == 50
     assert "claude" in tc.agent_command
+
+
+def test_finetuner_absent_by_default(sample_config_yaml: Path) -> None:
+    """Config without a finetuner section should have finetuner=None."""
+    cfg = load_config(sample_config_yaml)
+    assert cfg.finetuner is None
+
+
+def test_finetuner_opensource_parsed(tmp_path: Path) -> None:
+    """Opensource finetuner config is parsed into correct dataclasses."""
+    cfg_file = tmp_path / "multiagenttrainer.yaml"
+    cfg_file.write_text(
+        """\
+finetuner:
+  backend: opensource
+  jobs_dir: ./my-jobs
+  opensource:
+    model_id: meta-llama/Llama-3.2-1B
+    num_epochs: 5
+    use_4bit: false
+    lora_r: 8
+"""
+    )
+    cfg = load_config(cfg_file)
+    assert isinstance(cfg.finetuner, FineTunerConfig)
+    assert cfg.finetuner.backend == "opensource"
+    assert cfg.finetuner.jobs_dir == "./my-jobs"
+    assert cfg.finetuner.opensource.model_id == "meta-llama/Llama-3.2-1B"
+    assert cfg.finetuner.opensource.num_epochs == 5
+    assert cfg.finetuner.opensource.use_4bit is False
+    assert cfg.finetuner.opensource.lora_r == 8
+
+
+def test_finetuner_bedrock_parsed(tmp_path: Path) -> None:
+    """Bedrock finetuner config is parsed into correct dataclasses."""
+    cfg_file = tmp_path / "multiagenttrainer.yaml"
+    cfg_file.write_text(
+        """\
+finetuner:
+  backend: bedrock
+  bedrock:
+    base_model_id: amazon.titan-text-express-v1
+    region: eu-west-1
+    role_arn: arn:aws:iam::999:role/MyRole
+    output_s3_uri: s3://out-bucket/models/
+    training_data_s3_uri: s3://data-bucket/train/
+    customization_type: FINE_TUNING
+    epochs: 2
+"""
+    )
+    cfg = load_config(cfg_file)
+    assert isinstance(cfg.finetuner, FineTunerConfig)
+    assert cfg.finetuner.backend == "bedrock"
+    br = cfg.finetuner.bedrock
+    assert br.base_model_id == "amazon.titan-text-express-v1"
+    assert br.region == "eu-west-1"
+    assert br.customization_type == "FINE_TUNING"
+    assert br.epochs == 2
+    assert br.output_s3_uri == "s3://out-bucket/models/"
