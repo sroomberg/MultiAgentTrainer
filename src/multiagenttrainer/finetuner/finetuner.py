@@ -206,7 +206,7 @@ class OpenSourceFineTuner(FineTuner):
 
             hf_dataset = HFDataset.from_dict({"text": dataset})
 
-            training_args = SFTConfig(
+            sft_kwargs: dict[str, Any] = dict(
                 output_dir=str(output_dir),
                 num_train_epochs=self.cfg.num_epochs,
                 per_device_train_batch_size=self.cfg.batch_size,
@@ -219,10 +219,13 @@ class OpenSourceFineTuner(FineTuner):
                 report_to="none",
                 max_length=self.cfg.max_seq_length,
                 packing=self.cfg.packing,
-                gradient_checkpointing=True,
-                gradient_checkpointing_kwargs={"use_reentrant": False},
                 dataloader_num_workers=4,
             )
+            if self.cfg.gradient_checkpointing:
+                sft_kwargs["gradient_checkpointing"] = True
+                sft_kwargs["gradient_checkpointing_kwargs"] = {"use_reentrant": False}
+
+            training_args = SFTConfig(**sft_kwargs)
 
             trainer = SFTTrainer(
                 model=model,

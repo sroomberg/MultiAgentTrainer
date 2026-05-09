@@ -467,6 +467,21 @@ def test_os_start_job_no_bf16_sets_fp16(jobs_dir: Path) -> None:
     assert kwargs["fp16"] is True
 
 
+def test_os_start_job_gradient_checkpointing_enabled(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, gradient_checkpointing=True)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.sft_config_cls.call_args
+    assert kwargs["gradient_checkpointing"] is True
+    assert kwargs["gradient_checkpointing_kwargs"] == {"use_reentrant": False}
+
+
+def test_os_start_job_gradient_checkpointing_disabled(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, gradient_checkpointing=False)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.sft_config_cls.call_args
+    assert "gradient_checkpointing" not in kwargs
+
+
 def test_os_start_job_bf16_sets_bnb_compute_dtype(jobs_dir: Path) -> None:
     cfg = OpenSourceConfig(model_id="m", use_4bit=True, use_bf16=True)
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))

@@ -30,6 +30,7 @@ class OpenSourceConfig:
     packing: bool = False
     use_bf16: bool = True
     use_flash_attention: bool = False
+    gradient_checkpointing: bool = True
     hf_token: str | None = None
 
 
