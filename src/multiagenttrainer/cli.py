@@ -241,7 +241,7 @@ def status(
 # ---------------------------------------------------------------------------
 
 
-def _require_finetuner_config(config: Path | None) -> "tuple":
+def _require_finetuner_config(config: Path | None) -> tuple:
     cfg = load_config(config)
     if cfg.finetuner is None:
         console.print(
@@ -276,7 +276,7 @@ def finetune_start(
     ] = None,
     corpus: Annotated[
         Path | None,
-        typer.Option("--corpus", help="Path to corpus file (defaults to last ingest output)"),
+        typer.Option("--corpus", help="Corpus file (defaults to last ingest output)"),
     ] = None,
     name: Annotated[
         str,
@@ -287,7 +287,9 @@ def finetune_start(
     cfg, tuner = _require_finetuner_config(config)
 
     if corpus is None:
-        default_corpus = Path(cfg.training.output_dir).resolve() / ".staging" / "corpus.txt"
+        default_corpus = (
+            Path(cfg.training.output_dir).resolve() / ".staging" / "corpus.txt"
+        )
         if default_corpus.exists():
             corpus = default_corpus
         else:

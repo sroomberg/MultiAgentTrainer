@@ -144,8 +144,7 @@ def test_chunk_corpus_skips_tiny_tail(tmp_path: Path) -> None:
     p = tmp_path / "c.txt"
     p.write_text("x" * 100, encoding="utf-8")
     chunks = chunk_corpus(p, chars_per_chunk=60)
-    # Second chunk would be 40 chars — still > 50? No, but 40 < 50 so it should be skipped.
-    # First chunk: 60 chars, second: 40 chars (stripped) → 40 < 50, dropped.
+    # chunk 0: 60 chars, chunk 1: 40 chars stripped → 40 < 50, dropped.
     assert all(len(c) > 50 for c in chunks)
 
 
@@ -156,7 +155,7 @@ def test_write_jsonl_pretraining(tmp_path: Path) -> None:
     assert count == 2
     lines = out.read_text().splitlines()
     assert len(lines) == 2
-    for line, chunk in zip(lines, chunks):
+    for line, chunk in zip(lines, chunks, strict=True):
         record = json.loads(line)
         assert record == {"input": chunk}
 
@@ -501,7 +500,7 @@ def test_bedrock_parse_s3_uri(bedrock_tuner: BedrockFineTuner) -> None:
 
 
 def test_bedrock_parse_s3_uri_bucket_only(bedrock_tuner: BedrockFineTuner) -> None:
-    bucket, key = bedrock_tuner._parse_s3_uri("s3://my-bucket/")
+    bucket, _ = bedrock_tuner._parse_s3_uri("s3://my-bucket/")
     assert bucket == "my-bucket"
 
 

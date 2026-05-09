@@ -25,8 +25,8 @@ def write_jsonl(
 ) -> int:
     """Write text chunks to JSONL for Bedrock fine-tuning.
 
-    pretraining  → {"input": "<text>"}          (CONTINUED_PRE_TRAINING)
-    instruction  → {"prompt": "...", "completion": "..."}  (FINE_TUNING, split at midpoint)
+    pretraining  → {"input": "<text>"}            (CONTINUED_PRE_TRAINING)
+    instruction  → {"prompt": ..., "completion": ...}  (FINE_TUNING, split at midpoint)
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:

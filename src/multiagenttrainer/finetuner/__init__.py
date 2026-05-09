@@ -5,12 +5,12 @@ from .finetuner import BedrockFineTuner, FineTuneJob, FineTuner, OpenSourceFineT
 from .registry import create_fine_tuner
 
 __all__ = [
-    "FineTuner",
-    "FineTuneJob",
-    "OpenSourceFineTuner",
+    "BedrockConfig",
     "BedrockFineTuner",
+    "FineTuneJob",
+    "FineTuner",
     "FineTunerConfig",
     "OpenSourceConfig",
-    "BedrockConfig",
+    "OpenSourceFineTuner",
     "create_fine_tuner",
 ]

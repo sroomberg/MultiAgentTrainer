@@ -74,7 +74,7 @@ class FineTuner(abc.ABC):
 
     @abc.abstractmethod
     def start_job(self, dataset: Any, job_name: str) -> FineTuneJob:
-        """Start fine-tuning. May block (open-source) or return immediately (managed APIs)."""
+        """Start fine-tuning. May block (open-source) or return immediately (APIs)."""
 
     @abc.abstractmethod
     def get_status(self, job_id: str) -> FineTuneJob:
@@ -370,7 +370,9 @@ class BedrockFineTuner(FineTuner):
             backend="bedrock",
             status=status,
             model=self.cfg.base_model_id,
-            created_at=str(resp.get("creationTime", datetime.now(timezone.utc).isoformat())),
+            created_at=str(
+                resp.get("creationTime", datetime.now(timezone.utc).isoformat())
+            ),
         )
         job.status = status
         job.output_model = resp.get("outputModelArn")
