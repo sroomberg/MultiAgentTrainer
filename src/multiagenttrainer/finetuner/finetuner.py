@@ -134,9 +134,8 @@ class OpenSourceFineTuner(FineTuner):
             AutoModelForCausalLM,
             AutoTokenizer,
             BitsAndBytesConfig,
-            TrainingArguments,
         )
-        from trl import SFTTrainer
+        from trl import SFTConfig, SFTTrainer
 
         job_id = (
             f"opensource-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
@@ -201,27 +200,29 @@ class OpenSourceFineTuner(FineTuner):
 
             hf_dataset = HFDataset.from_dict({"text": dataset})
 
-            training_args = TrainingArguments(
+            training_args = SFTConfig(
                 output_dir=str(output_dir),
                 num_train_epochs=self.cfg.num_epochs,
                 per_device_train_batch_size=self.cfg.batch_size,
                 gradient_accumulation_steps=self.cfg.gradient_accumulation_steps,
                 learning_rate=self.cfg.learning_rate,
                 bf16=self.cfg.use_bf16,
-                fp16=not self.cfg.use_bf16 and not self.cfg.use_4bit,
+                fp16=not self.cfg.use_bf16,
                 logging_steps=10,
                 save_strategy="epoch",
                 report_to="none",
+                max_length=self.cfg.max_seq_length,
+                packing=self.cfg.packing,
+                gradient_checkpointing=True,
+                gradient_checkpointing_kwargs={"use_reentrant": False},
+                dataloader_num_workers=4,
             )
 
             trainer = SFTTrainer(
                 model=model,
                 args=training_args,
                 train_dataset=hf_dataset,
-                dataset_text_field="text",
-                max_seq_length=self.cfg.max_seq_length,
-                tokenizer=tokenizer,
-                packing=self.cfg.packing,
+                processing_class=tokenizer,
             )
 
             self.console.print("[bold]Training…[/bold]")
