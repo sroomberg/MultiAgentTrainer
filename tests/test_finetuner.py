@@ -340,13 +340,13 @@ class _HFMocks:
     def __init__(
         self,
         from_pretrained: MagicMock,
-        training_args_cls: MagicMock,
+        sft_config_cls: MagicMock,
         sft_trainer_cls: MagicMock,
         torch: MagicMock,
         bnb_config_cls: MagicMock,
     ) -> None:
         self.from_pretrained = from_pretrained
-        self.training_args_cls = training_args_cls
+        self.sft_config_cls = sft_config_cls
         self.sft_trainer_cls = sft_trainer_cls
         self.torch = torch
         self.bnb_config_cls = bnb_config_cls
@@ -361,7 +361,7 @@ def _run_start_job(tuner: OpenSourceFineTuner) -> tuple[FineTuneJob, _HFMocks]:
     mock_trainer.train.return_value = mock_train_result
 
     mock_sft_trainer_cls = MagicMock(return_value=mock_trainer)
-    mock_training_args_cls = MagicMock(return_value=MagicMock())
+    mock_sft_config_cls = MagicMock(return_value=MagicMock())
     mock_from_pretrained = MagicMock(return_value=MagicMock())
     mock_bnb_config_cls = MagicMock(return_value=MagicMock())
 
@@ -377,13 +377,13 @@ def _run_start_job(tuner: OpenSourceFineTuner) -> tuple[FineTuneJob, _HFMocks]:
     mock_transformers.AutoModelForCausalLM.from_pretrained = mock_from_pretrained
     mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tokenizer
     mock_transformers.BitsAndBytesConfig = mock_bnb_config_cls
-    mock_transformers.TrainingArguments = mock_training_args_cls
 
     mock_peft = MagicMock()
     mock_peft.get_peft_model.return_value = MagicMock()
 
     mock_trl = MagicMock()
     mock_trl.SFTTrainer = mock_sft_trainer_cls
+    mock_trl.SFTConfig = mock_sft_config_cls
 
     fake_modules = {
         "torch": mock_torch,
@@ -398,7 +398,7 @@ def _run_start_job(tuner: OpenSourceFineTuner) -> tuple[FineTuneJob, _HFMocks]:
 
     return job, _HFMocks(
         from_pretrained=mock_from_pretrained,
-        training_args_cls=mock_training_args_cls,
+        sft_config_cls=mock_sft_config_cls,
         sft_trainer_cls=mock_sft_trainer_cls,
         torch=mock_torch,
         bnb_config_cls=mock_bnb_config_cls,
@@ -434,21 +434,21 @@ def test_os_describe_all_optimisations(jobs_dir: Path) -> None:
 def test_os_start_job_packing_true(jobs_dir: Path) -> None:
     cfg = OpenSourceConfig(model_id="m", use_4bit=False, packing=True)
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
-    _, kwargs = mocks.sft_trainer_cls.call_args
+    _, kwargs = mocks.sft_config_cls.call_args
     assert kwargs["packing"] is True
 
 
 def test_os_start_job_packing_false(jobs_dir: Path) -> None:
     cfg = OpenSourceConfig(model_id="m", use_4bit=False, packing=False)
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
-    _, kwargs = mocks.sft_trainer_cls.call_args
+    _, kwargs = mocks.sft_config_cls.call_args
     assert kwargs["packing"] is False
 
 
 def test_os_start_job_bf16_sets_training_args(jobs_dir: Path) -> None:
     cfg = OpenSourceConfig(model_id="m", use_4bit=False, use_bf16=True)
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
-    _, kwargs = mocks.training_args_cls.call_args
+    _, kwargs = mocks.sft_config_cls.call_args
     assert kwargs["bf16"] is True
     assert kwargs["fp16"] is False
 
@@ -456,7 +456,7 @@ def test_os_start_job_bf16_sets_training_args(jobs_dir: Path) -> None:
 def test_os_start_job_no_bf16_sets_fp16(jobs_dir: Path) -> None:
     cfg = OpenSourceConfig(model_id="m", use_4bit=False, use_bf16=False)
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
-    _, kwargs = mocks.training_args_cls.call_args
+    _, kwargs = mocks.sft_config_cls.call_args
     assert kwargs["bf16"] is False
     assert kwargs["fp16"] is True
 
