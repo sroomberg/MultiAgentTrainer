@@ -340,16 +340,18 @@ class _HFMocks:
     def __init__(
         self,
         from_pretrained: MagicMock,
-        training_args_cls: MagicMock,
+        sft_config_cls: MagicMock,
         sft_trainer_cls: MagicMock,
         torch: MagicMock,
         bnb_config_cls: MagicMock,
+        hf_hub: MagicMock,
     ) -> None:
         self.from_pretrained = from_pretrained
-        self.training_args_cls = training_args_cls
+        self.sft_config_cls = sft_config_cls
         self.sft_trainer_cls = sft_trainer_cls
         self.torch = torch
         self.bnb_config_cls = bnb_config_cls
+        self.hf_hub = hf_hub
 
 
 def _run_start_job(tuner: OpenSourceFineTuner) -> tuple[FineTuneJob, _HFMocks]:
@@ -361,7 +363,7 @@ def _run_start_job(tuner: OpenSourceFineTuner) -> tuple[FineTuneJob, _HFMocks]:
     mock_trainer.train.return_value = mock_train_result
 
     mock_sft_trainer_cls = MagicMock(return_value=mock_trainer)
-    mock_training_args_cls = MagicMock(return_value=MagicMock())
+    mock_sft_config_cls = MagicMock(return_value=MagicMock())
     mock_from_pretrained = MagicMock(return_value=MagicMock())
     mock_bnb_config_cls = MagicMock(return_value=MagicMock())
 
@@ -377,13 +379,15 @@ def _run_start_job(tuner: OpenSourceFineTuner) -> tuple[FineTuneJob, _HFMocks]:
     mock_transformers.AutoModelForCausalLM.from_pretrained = mock_from_pretrained
     mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tokenizer
     mock_transformers.BitsAndBytesConfig = mock_bnb_config_cls
-    mock_transformers.TrainingArguments = mock_training_args_cls
 
     mock_peft = MagicMock()
     mock_peft.get_peft_model.return_value = MagicMock()
 
     mock_trl = MagicMock()
     mock_trl.SFTTrainer = mock_sft_trainer_cls
+    mock_trl.SFTConfig = mock_sft_config_cls
+
+    mock_hf_hub = MagicMock()
 
     fake_modules = {
         "torch": mock_torch,
@@ -392,16 +396,18 @@ def _run_start_job(tuner: OpenSourceFineTuner) -> tuple[FineTuneJob, _HFMocks]:
         "trl": mock_trl,
         "datasets": MagicMock(),
         "bitsandbytes": MagicMock(),
+        "huggingface_hub": mock_hf_hub,
     }
     with patch.dict("sys.modules", fake_modules):
         job = tuner.start_job(["chunk one", "chunk two"], "test")
 
     return job, _HFMocks(
         from_pretrained=mock_from_pretrained,
-        training_args_cls=mock_training_args_cls,
+        sft_config_cls=mock_sft_config_cls,
         sft_trainer_cls=mock_sft_trainer_cls,
         torch=mock_torch,
         bnb_config_cls=mock_bnb_config_cls,
+        hf_hub=mock_hf_hub,
     )
 
 
@@ -434,21 +440,21 @@ def test_os_describe_all_optimisations(jobs_dir: Path) -> None:
 def test_os_start_job_packing_true(jobs_dir: Path) -> None:
     cfg = OpenSourceConfig(model_id="m", use_4bit=False, packing=True)
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
-    _, kwargs = mocks.sft_trainer_cls.call_args
+    _, kwargs = mocks.sft_config_cls.call_args
     assert kwargs["packing"] is True
 
 
 def test_os_start_job_packing_false(jobs_dir: Path) -> None:
     cfg = OpenSourceConfig(model_id="m", use_4bit=False, packing=False)
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
-    _, kwargs = mocks.sft_trainer_cls.call_args
+    _, kwargs = mocks.sft_config_cls.call_args
     assert kwargs["packing"] is False
 
 
 def test_os_start_job_bf16_sets_training_args(jobs_dir: Path) -> None:
     cfg = OpenSourceConfig(model_id="m", use_4bit=False, use_bf16=True)
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
-    _, kwargs = mocks.training_args_cls.call_args
+    _, kwargs = mocks.sft_config_cls.call_args
     assert kwargs["bf16"] is True
     assert kwargs["fp16"] is False
 
@@ -456,9 +462,24 @@ def test_os_start_job_bf16_sets_training_args(jobs_dir: Path) -> None:
 def test_os_start_job_no_bf16_sets_fp16(jobs_dir: Path) -> None:
     cfg = OpenSourceConfig(model_id="m", use_4bit=False, use_bf16=False)
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
-    _, kwargs = mocks.training_args_cls.call_args
+    _, kwargs = mocks.sft_config_cls.call_args
     assert kwargs["bf16"] is False
     assert kwargs["fp16"] is True
+
+
+def test_os_start_job_gradient_checkpointing_enabled(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, gradient_checkpointing=True)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.sft_config_cls.call_args
+    assert kwargs["gradient_checkpointing"] is True
+    assert kwargs["gradient_checkpointing_kwargs"] == {"use_reentrant": False}
+
+
+def test_os_start_job_gradient_checkpointing_disabled(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, gradient_checkpointing=False)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    _, kwargs = mocks.sft_config_cls.call_args
+    assert "gradient_checkpointing" not in kwargs
 
 
 def test_os_start_job_bf16_sets_bnb_compute_dtype(jobs_dir: Path) -> None:
@@ -480,6 +501,30 @@ def test_os_start_job_no_flash_attention_omits_attn_impl(jobs_dir: Path) -> None
     _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
     _, kwargs = mocks.from_pretrained.call_args
     assert "attn_implementation" not in kwargs
+
+
+def test_os_start_job_hf_token_calls_login(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, hf_token="hf_test123")
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    mocks.hf_hub.login.assert_called_once_with(
+        token="hf_test123", add_to_git_credential=False
+    )
+
+
+def test_os_start_job_no_hf_token_skips_login(jobs_dir: Path) -> None:
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, hf_token=None)
+    with patch.dict("os.environ", {}, clear=True):
+        _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    mocks.hf_hub.login.assert_not_called()
+
+
+def test_os_start_job_hf_token_from_env(jobs_dir: Path, monkeypatch: Any) -> None:
+    monkeypatch.setenv("HF_TOKEN", "hf_envtoken")
+    cfg = OpenSourceConfig(model_id="m", use_4bit=False, hf_token=None)
+    _, mocks = _run_start_job(OpenSourceFineTuner(cfg, jobs_dir, console))
+    mocks.hf_hub.login.assert_called_once_with(
+        token="hf_envtoken", add_to_git_credential=False
+    )
 
 
 # ---------------------------------------------------------------------------

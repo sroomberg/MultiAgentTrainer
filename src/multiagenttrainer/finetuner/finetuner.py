@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 import json
+import os
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -134,9 +135,8 @@ class OpenSourceFineTuner(FineTuner):
             AutoModelForCausalLM,
             AutoTokenizer,
             BitsAndBytesConfig,
-            TrainingArguments,
         )
-        from trl import SFTTrainer
+        from trl import SFTConfig, SFTTrainer
 
         job_id = (
             f"opensource-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
@@ -156,6 +156,11 @@ class OpenSourceFineTuner(FineTuner):
 
         try:
             self.console.print(f"[bold]Loading model:[/bold] {self.cfg.model_id}")
+
+            token = self.cfg.hf_token or os.environ.get("HF_TOKEN")
+            if token:
+                from huggingface_hub import login
+                login(token=token, add_to_git_credential=False)
 
             compute_dtype = torch.bfloat16 if self.cfg.use_bf16 else torch.float16
 
@@ -201,27 +206,32 @@ class OpenSourceFineTuner(FineTuner):
 
             hf_dataset = HFDataset.from_dict({"text": dataset})
 
-            training_args = TrainingArguments(
+            sft_kwargs: dict[str, Any] = dict(
                 output_dir=str(output_dir),
                 num_train_epochs=self.cfg.num_epochs,
                 per_device_train_batch_size=self.cfg.batch_size,
                 gradient_accumulation_steps=self.cfg.gradient_accumulation_steps,
                 learning_rate=self.cfg.learning_rate,
                 bf16=self.cfg.use_bf16,
-                fp16=not self.cfg.use_bf16 and not self.cfg.use_4bit,
+                fp16=not self.cfg.use_bf16,
                 logging_steps=10,
                 save_strategy="epoch",
                 report_to="none",
+                max_length=self.cfg.max_seq_length,
+                packing=self.cfg.packing,
+                dataloader_num_workers=4,
             )
+            if self.cfg.gradient_checkpointing:
+                sft_kwargs["gradient_checkpointing"] = True
+                sft_kwargs["gradient_checkpointing_kwargs"] = {"use_reentrant": False}
+
+            training_args = SFTConfig(**sft_kwargs)
 
             trainer = SFTTrainer(
                 model=model,
                 args=training_args,
                 train_dataset=hf_dataset,
-                dataset_text_field="text",
-                max_seq_length=self.cfg.max_seq_length,
-                tokenizer=tokenizer,
-                packing=self.cfg.packing,
+                processing_class=tokenizer,
             )
 
             self.console.print("[bold]Training…[/bold]")

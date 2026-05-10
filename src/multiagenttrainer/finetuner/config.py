@@ -21,10 +21,17 @@ class OpenSourceConfig:
     learning_rate: float = 2e-4
     gradient_accumulation_steps: int = 4
     use_4bit: bool = True
-    target_modules: list[str] = field(default_factory=lambda: ["q_proj", "v_proj"])
-    packing: bool = True
-    use_bf16: bool = False
+    target_modules: list[str] = field(
+        default_factory=lambda: [
+            "q_proj", "k_proj", "v_proj", "o_proj",
+            "gate_proj", "up_proj", "down_proj",
+        ]
+    )
+    packing: bool = False
+    use_bf16: bool = True
     use_flash_attention: bool = False
+    gradient_checkpointing: bool = True
+    hf_token: str | None = None
 
 
 @dataclass
