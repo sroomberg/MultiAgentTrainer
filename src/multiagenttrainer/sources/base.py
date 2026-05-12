@@ -31,3 +31,7 @@ class DataSource(abc.ABC):
             shutil.rmtree(dest)
         dest.mkdir(parents=True)
         return dest
+
+    @staticmethod
+    def _branch_suffix(branch: str | None) -> str:
+        return f" ({branch})" if branch else ""

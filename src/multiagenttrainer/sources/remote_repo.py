@@ -40,5 +40,4 @@ class RemoteRepoSource(DataSource):
         return dest
 
     def describe(self) -> str:
-        suffix = f" ({self.branch})" if self.branch else ""
-        return f"remote_repo: {self.url}{suffix}"
+        return f"remote_repo: {self.url}{self._branch_suffix(self.branch)}"
