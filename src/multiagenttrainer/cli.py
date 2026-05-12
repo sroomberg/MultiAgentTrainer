@@ -18,6 +18,7 @@ from .ingest import Ingester
 from .progress import find_progress_files, read_progress
 from .report import generate_report, save_report
 from .runner import Runner
+from .sources import GitHubRepoListSource
 
 app = typer.Typer(
     name="mat",
@@ -51,6 +52,10 @@ def train(
         str,
         typer.Option("--name", help="Label for this run (shown in mat watch)"),
     ] = "",
+    repos: Annotated[
+        list[str] | None,
+        typer.Option("--repo", "-r", help="GitHub repo to include (URL or owner/repo). Repeatable."),
+    ] = None,
 ) -> None:
     """Run the full pipeline: ingest sources → prepare corpus → train."""
     cfg = load_config(config)
@@ -59,6 +64,8 @@ def train(
         cfg.training.max_experiments = max_experiments
     if output_dir is not None:
         cfg.training.output_dir = str(output_dir)
+    if repos:
+        cfg.sources.append(GitHubRepoListSource(repos=repos))
 
     if not cfg.sources:
         console.print(
@@ -100,9 +107,15 @@ def list_sources(
         Path | None,
         typer.Option("--config", "-c", help="Path to config YAML file"),
     ] = None,
+    repos: Annotated[
+        list[str] | None,
+        typer.Option("--repo", "-r", help="GitHub repo (URL or owner/repo). Repeatable."),
+    ] = None,
 ) -> None:
     """List configured data sources."""
     cfg = load_config(config)
+    if repos:
+        cfg.sources.append(GitHubRepoListSource(repos=repos))
 
     if not cfg.sources:
         console.print("[yellow]No data sources configured.[/yellow]")
@@ -124,9 +137,15 @@ def ingest_cmd(
         Path | None,
         typer.Option("--output", "-o", help="Corpus output path"),
     ] = None,
+    repos: Annotated[
+        list[str] | None,
+        typer.Option("--repo", "-r", help="GitHub repo (URL or owner/repo). Repeatable."),
+    ] = None,
 ) -> None:
     """Ingest data sources without training (useful for inspection)."""
     cfg = load_config(config)
+    if repos:
+        cfg.sources.append(GitHubRepoListSource(repos=repos))
 
     if not cfg.sources:
         console.print("[red]No data sources configured.[/red]")

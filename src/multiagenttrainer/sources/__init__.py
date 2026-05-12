@@ -4,6 +4,7 @@ from .base import DataSource
 from .bedrock_kb import BedrockKnowledgeBaseSource
 from .github_org import GitHubOrgSource
 from .github_repo import GitHubRepoSource
+from .github_repo_list import GitHubRepoListSource
 from .local_repo import LocalRepoSource
 from .remote_repo import RemoteRepoSource
 
@@ -12,6 +13,7 @@ __all__ = [
     "DataSource",
     "GitHubOrgSource",
     "GitHubRepoSource",
+    "GitHubRepoListSource",
     "LocalRepoSource",
     "RemoteRepoSource",
     "create_source",
@@ -48,6 +50,16 @@ def create_source(source_cfg: dict[str, object]) -> DataSource:
             max_repos=int(source_cfg.get("max_repos", 100)),  # type: ignore[arg-type]
             visibility=str(source_cfg.get("visibility", "all")),
             name=source_cfg.get("name"),  # type: ignore[arg-type]
+        )
+
+    if src_type == "github_repo_list":
+        raw_repos = source_cfg.get("repos", [])
+        if not isinstance(raw_repos, list):
+            raise ValueError("github_repo_list source requires a 'repos' list")
+        return GitHubRepoListSource(
+            repos=[str(r) for r in raw_repos],
+            branch=source_cfg.get("branch"),  # type: ignore[arg-type]
+            name=str(source_cfg.get("name", "github-repos")),
         )
 
     if src_type == "bedrock_knowledge_base":
