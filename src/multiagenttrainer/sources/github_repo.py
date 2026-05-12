@@ -41,4 +41,7 @@ class GitHubRepoSource(DataSource):
         return self._inner.fetch(staging_dir)
 
     def describe(self) -> str:
-        return f"github_repo: {self.owner}/{self.repo}{self._branch_suffix(self.branch)}"
+        return (
+            f"github_repo: {self.owner}/{self.repo}"
+            f"{self._branch_suffix(self.branch)}"
+        )

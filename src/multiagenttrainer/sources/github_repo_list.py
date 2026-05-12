@@ -16,7 +16,7 @@ def _normalise_repo_url(repo: str) -> str:
     if repo.startswith(("https://", "http://", "git@")):
         return repo
     parts = repo.strip("/").split("/")
-    if len(parts) == 2:  # noqa: PLR2004
+    if len(parts) == 2:
         return f"https://github.com/{parts[0]}/{parts[1]}.git"
     raise ValueError(
         f"Cannot parse repo {repo!r}: expected a URL or 'owner/repo' shorthand"
