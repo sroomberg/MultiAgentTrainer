@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -109,10 +108,7 @@ class GitHubOrgSource(DataSource):
         self.name = name or self.org
 
     def fetch(self, staging_dir: Path) -> Path:
-        org_dir = staging_dir / self.name
-        if org_dir.exists():
-            shutil.rmtree(org_dir)
-        org_dir.mkdir(parents=True)
+        org_dir = self._prepare_dest(staging_dir)
 
         repos = _list_org_repos(self.org, self.visibility, self.max_repos)
         log.info("Found %d repos in %s", len(repos), self.org)

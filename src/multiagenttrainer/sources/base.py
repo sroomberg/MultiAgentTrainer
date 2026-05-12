@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+import shutil
 from pathlib import Path
 
 
@@ -22,3 +23,11 @@ class DataSource(abc.ABC):
     @abc.abstractmethod
     def describe(self) -> str:
         """Return a short human-readable description of this source."""
+
+    def _prepare_dest(self, staging_dir: Path) -> Path:
+        """Return a clean, empty destination directory inside *staging_dir*."""
+        dest = staging_dir / self.name  # type: ignore[attr-defined]
+        if dest.exists():
+            shutil.rmtree(dest)
+        dest.mkdir(parents=True)
+        return dest

@@ -24,9 +24,7 @@ class RemoteRepoSource(DataSource):
         self.name = name or url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
 
     def fetch(self, staging_dir: Path) -> Path:
-        dest = staging_dir / self.name
-        if dest.exists():
-            shutil.rmtree(dest)
+        dest = self._prepare_dest(staging_dir)
 
         clone_kwargs: dict[str, object] = {"depth": 1}
         if self.branch:

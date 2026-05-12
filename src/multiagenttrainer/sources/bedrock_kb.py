@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 from pathlib import Path
 
 from .base import DataSource
@@ -36,10 +35,7 @@ class BedrockKnowledgeBaseSource(DataSource):
     def fetch(self, staging_dir: Path) -> Path:
         import boto3  # late import so boto3 is only required when used
 
-        dest = staging_dir / self.name
-        if dest.exists():
-            shutil.rmtree(dest)
-        dest.mkdir(parents=True)
+        dest = self._prepare_dest(staging_dir)
 
         client = boto3.client("bedrock-agent-runtime", region_name=self.region)
 

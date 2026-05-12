@@ -20,14 +20,12 @@ class LocalRepoSource(DataSource):
             msg = f"Local repo not found: {self.path}"
             raise FileNotFoundError(msg)
 
-        dest = staging_dir / self.name
-        if dest.exists():
-            shutil.rmtree(dest)
-
+        dest = self._prepare_dest(staging_dir)
         shutil.copytree(
             self.path,
             dest,
             ignore=shutil.ignore_patterns(".git"),
+            dirs_exist_ok=True,
         )
         return dest
 
