@@ -54,7 +54,7 @@ def train(
     ] = "",
     repos: Annotated[
         list[str] | None,
-        typer.Option("--repo", "-r", help="GitHub repo to include (URL or owner/repo). Repeatable."),
+        typer.Option("--repo", "-r", help="Repo URL or owner/repo. Repeatable."),
     ] = None,
 ) -> None:
     """Run the full pipeline: ingest sources → prepare corpus → train."""
@@ -109,7 +109,7 @@ def list_sources(
     ] = None,
     repos: Annotated[
         list[str] | None,
-        typer.Option("--repo", "-r", help="GitHub repo (URL or owner/repo). Repeatable."),
+        typer.Option("--repo", "-r", help="Repo URL or owner/repo. Repeatable."),
     ] = None,
 ) -> None:
     """List configured data sources."""
@@ -139,7 +139,7 @@ def ingest_cmd(
     ] = None,
     repos: Annotated[
         list[str] | None,
-        typer.Option("--repo", "-r", help="GitHub repo (URL or owner/repo). Repeatable."),
+        typer.Option("--repo", "-r", help="Repo URL or owner/repo. Repeatable."),
     ] = None,
 ) -> None:
     """Ingest data sources without training (useful for inspection)."""
