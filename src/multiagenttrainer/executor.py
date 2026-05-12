@@ -49,19 +49,7 @@ class LocalExecutor(Executor):
                 cwd=cwd,
                 start_new_session=True,
             )
-            try:
-                stdout_raw, stderr_raw = await asyncio.wait_for(
-                    proc.communicate(), timeout=timeout
-                )
-            except asyncio.TimeoutError:
-                proc.kill()
-                return RunResult(exit_code=-1, stdout="", stderr="", error="Timed out")
-
-            return RunResult(
-                exit_code=proc.returncode or 0,
-                stdout=stdout_raw.decode("utf-8", errors="replace"),
-                stderr=stderr_raw.decode("utf-8", errors="replace"),
-            )
+            return await _communicate(proc, timeout)
         except Exception as exc:
             return RunResult(exit_code=-1, stdout="", stderr="", error=str(exc))
 
@@ -104,19 +92,7 @@ class SSHExecutor(Executor):
                 stderr=asyncio.subprocess.PIPE,
                 start_new_session=True,
             )
-            try:
-                stdout_raw, stderr_raw = await asyncio.wait_for(
-                    proc.communicate(), timeout=timeout
-                )
-            except asyncio.TimeoutError:
-                proc.kill()
-                return RunResult(exit_code=-1, stdout="", stderr="", error="Timed out")
-
-            return RunResult(
-                exit_code=proc.returncode or 0,
-                stdout=stdout_raw.decode("utf-8", errors="replace"),
-                stderr=stderr_raw.decode("utf-8", errors="replace"),
-            )
+            return await _communicate(proc, timeout)
         except Exception as exc:
             return RunResult(exit_code=-1, stdout="", stderr="", error=str(exc))
 
@@ -167,21 +143,27 @@ class DockerExecutor(Executor):
                 stderr=asyncio.subprocess.PIPE,
                 start_new_session=True,
             )
-            try:
-                stdout_raw, stderr_raw = await asyncio.wait_for(
-                    proc.communicate(), timeout=timeout
-                )
-            except asyncio.TimeoutError:
-                proc.kill()
-                return RunResult(exit_code=-1, stdout="", stderr="", error="Timed out")
-
-            return RunResult(
-                exit_code=proc.returncode or 0,
-                stdout=stdout_raw.decode("utf-8", errors="replace"),
-                stderr=stderr_raw.decode("utf-8", errors="replace"),
-            )
+            return await _communicate(proc, timeout)
         except Exception as exc:
             return RunResult(exit_code=-1, stdout="", stderr="", error=str(exc))
+
+
+async def _communicate(
+    proc: asyncio.subprocess.Process, timeout: float
+) -> RunResult:
+    """Wait for *proc* to finish, handling timeout and output decoding."""
+    try:
+        stdout_raw, stderr_raw = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout
+        )
+    except asyncio.TimeoutError:
+        proc.kill()
+        return RunResult(exit_code=-1, stdout="", stderr="", error="Timed out")
+    return RunResult(
+        exit_code=proc.returncode or 0,
+        stdout=stdout_raw.decode("utf-8", errors="replace"),
+        stderr=stderr_raw.decode("utf-8", errors="replace"),
+    )
 
 
 def _ssh_opts(key_path: str | None) -> str:
