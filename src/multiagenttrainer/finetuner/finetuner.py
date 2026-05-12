@@ -30,15 +30,19 @@ class FineTuneJob:
     metrics: dict[str, float] = field(default_factory=dict)
     error: str | None = None
 
+    @staticmethod
+    def _safe_id(job_id: str) -> str:
+        return job_id.replace("/", "_").replace(":", "_")
+
     def save(self, jobs_dir: Path) -> None:
         jobs_dir.mkdir(parents=True, exist_ok=True)
-        safe_id = self.job_id.replace("/", "_").replace(":", "_")
-        (jobs_dir / f"{safe_id}.json").write_text(json.dumps(asdict(self), indent=2))
+        (jobs_dir / f"{self._safe_id(self.job_id)}.json").write_text(
+            json.dumps(asdict(self), indent=2)
+        )
 
     @classmethod
     def load(cls, jobs_dir: Path, job_id: str) -> FineTuneJob | None:
-        safe_id = job_id.replace("/", "_").replace(":", "_")
-        path = jobs_dir / f"{safe_id}.json"
+        path = jobs_dir / f"{cls._safe_id(job_id)}.json"
         if not path.exists():
             return None
         return cls(**json.loads(path.read_text()))
