@@ -102,9 +102,7 @@ class OpenSourceFineTuner(FineTuner):
     Training runs in-process and blocks until complete.
     """
 
-    def __init__(
-        self, cfg: OpenSourceConfig, jobs_dir: Path, console: Console
-    ) -> None:
+    def __init__(self, cfg: OpenSourceConfig, jobs_dir: Path, console: Console) -> None:
         super().__init__(jobs_dir, console)
         self.cfg = cfg
 
@@ -160,6 +158,7 @@ class OpenSourceFineTuner(FineTuner):
             token = self.cfg.hf_token or os.environ.get("HF_TOKEN")
             if token:
                 from huggingface_hub import login
+
                 login(token=token, add_to_git_credential=False)
 
             compute_dtype = torch.bfloat16 if self.cfg.use_bf16 else torch.float16
@@ -290,9 +289,7 @@ class BedrockFineTuner(FineTuner):
     that can be polled with get_status().
     """
 
-    def __init__(
-        self, cfg: BedrockConfig, jobs_dir: Path, console: Console
-    ) -> None:
+    def __init__(self, cfg: BedrockConfig, jobs_dir: Path, console: Console) -> None:
         super().__init__(jobs_dir, console)
         self.cfg = cfg
 

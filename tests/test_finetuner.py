@@ -274,9 +274,7 @@ def test_os_start_job_saves_failed_job_on_error(
     assert saved.status == "failed"
 
 
-def test_os_start_job_success(
-    os_tuner: OpenSourceFineTuner, jobs_dir: Path
-) -> None:
+def test_os_start_job_success(os_tuner: OpenSourceFineTuner, jobs_dir: Path) -> None:
     """Happy path: mock HF stack and verify a completed job is returned."""
     chunks = ["some text chunk"] * 5
 
@@ -635,9 +633,7 @@ def test_bedrock_get_status_failed(
     assert job.error == "Insufficient training data"
 
 
-def test_bedrock_cancel_job(
-    bedrock_tuner: BedrockFineTuner, jobs_dir: Path
-) -> None:
+def test_bedrock_cancel_job(bedrock_tuner: BedrockFineTuner, jobs_dir: Path) -> None:
     job_id = "arn:aws:bedrock:us-east-1:123:model-customization-job/running-job"
     FineTuneJob(
         job_id=job_id,

@@ -23,8 +23,13 @@ class OpenSourceConfig:
     use_4bit: bool = True
     target_modules: list[str] = field(
         default_factory=lambda: [
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj",
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
         ]
     )
     packing: bool = False
