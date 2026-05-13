@@ -1,6 +1,0 @@
-name: mat-model-infra
-runtime:
-  name: python
-  options:
-    virtualenv: venv
-description: Per-model EC2 inference servers for MultiAgentTrainer
