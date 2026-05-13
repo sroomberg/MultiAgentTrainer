@@ -90,7 +90,9 @@ def train(
 
     # Setup and run
     notifier = build_notifier(cfg.notifications.ses if cfg.notifications else None)
-    runner = Runner(cfg.autoresearch, cfg.training, console, name=name, notifier=notifier)
+    runner = Runner(
+        cfg.autoresearch, cfg.training, console, name=name, notifier=notifier
+    )
     workspace = runner.setup_workspace(corpus_path)
 
     results = asyncio.run(runner.run_experiments(workspace))

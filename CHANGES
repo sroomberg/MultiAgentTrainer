@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.2.1 — 2026-05-13
+- Fix E501 line-length violation in cli.py introduced by notification wiring
+
 ## v1.2.0 — 2026-05-13
 - Add pluggable failure notification system with abstract `Notifier` base class
 - Add `SESNotifier` backend for failure alerts via AWS SES (configurable via `notifications.ses` in YAML config)
