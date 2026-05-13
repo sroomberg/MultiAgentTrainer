@@ -1,9 +1,8 @@
 """Data source for local git repositories."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
+from typing import Optional
 
 from .base import DataSource
 
@@ -11,7 +10,7 @@ from .base import DataSource
 class LocalRepoSource(DataSource):
     """Copy a local git repository into the staging area."""
 
-    def __init__(self, path: str, name: str | None = None) -> None:
+    def __init__(self, path: str, name: Optional[str] = None) -> None:
         self.path = Path(path).expanduser().resolve()
         self.name = name or self.path.name
 

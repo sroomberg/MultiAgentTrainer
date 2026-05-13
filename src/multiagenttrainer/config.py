@@ -1,10 +1,8 @@
 """Configuration loading and dataclasses."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import yaml
 
@@ -31,7 +29,7 @@ _DEFAULT_AUTORESEARCH_REPO = "https://github.com/karpathy/autoresearch"
 class NotificationsConfig:
     """Top-level notifications configuration."""
 
-    ses: SESConfig | None = None
+    ses: Optional[SESConfig] = None
 
 
 @dataclass
@@ -41,7 +39,7 @@ class AutoresearchConfig:
     repo: str = _DEFAULT_AUTORESEARCH_REPO
     branch: str = "master"
     train_time: int = 300  # seconds
-    program_md: str | None = None  # optional override path
+    program_md: Optional[str] = None  # optional override path
 
 
 @dataclass
@@ -50,11 +48,11 @@ class ExecutionConfig:
 
     type: Literal["local", "ssh", "docker"] = "local"
     # SSH options
-    ssh_host: str | None = None
-    ssh_key: str | None = None  # path to private key; None = SSH default
+    ssh_host: Optional[str] = None
+    ssh_key: Optional[str] = None  # path to private key; None = SSH default
     remote_dir: str = "/tmp/mat-runs"
     # Docker options
-    container: str | None = None
+    container: Optional[str] = None
     container_dir: str = "/tmp/mat-runs"
 
 
@@ -68,7 +66,7 @@ class MachineConfig:
 
     name: str
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
-    agent_command: str | None = None  # overrides training.agent_command if set
+    agent_command: Optional[str] = None  # overrides training.agent_command if set
 
 
 @dataclass
@@ -93,12 +91,12 @@ class TrainerConfig:
     training: TrainingConfig = field(default_factory=TrainingConfig)
     sources: list[DataSource] = field(default_factory=list)
     source_configs: list[dict[str, object]] = field(default_factory=list)
-    finetuner: FineTunerConfig | None = None
-    notifications: NotificationsConfig | None = None
+    finetuner: Optional[FineTunerConfig] = None
+    notifications: Optional[NotificationsConfig] = None
     machines: list[MachineConfig] = field(default_factory=list)
 
 
-def load_config(config_path: Path | None = None) -> TrainerConfig:
+def load_config(config_path: Optional[Path] = None) -> TrainerConfig:
     """Load trainer config from YAML, falling back to defaults."""
     if config_path is None:
         for candidate in CONFIG_CANDIDATES:
@@ -148,13 +146,13 @@ def load_config(config_path: Path | None = None) -> TrainerConfig:
         sources.append(create_source(src_cfg))
 
     # Fine-tuner settings
-    finetuner: FineTunerConfig | None = None
+    finetuner: Optional[FineTunerConfig] = None
     ft_data = data.get("finetuner")
     if ft_data:
         finetuner = _parse_finetuner_config(ft_data)
 
     # Notifications settings
-    notifications: NotificationsConfig | None = None
+    notifications: Optional[NotificationsConfig] = None
     notif_data = data.get("notifications")
     if notif_data:
         notifications = _parse_notifications_config(notif_data)
@@ -241,7 +239,7 @@ def _parse_finetuner_config(data: dict[str, object]) -> FineTunerConfig:
 
 
 def _parse_notifications_config(data: dict[str, object]) -> NotificationsConfig:
-    ses_cfg: SESConfig | None = None
+    ses_cfg: Optional[SESConfig] = None
     ses_data = data.get("ses")
     if ses_data:
         assert isinstance(ses_data, dict)

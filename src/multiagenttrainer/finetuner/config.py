@@ -1,9 +1,7 @@
 """Configuration dataclasses for fine-tuning backends."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, Optional
 
 
 @dataclass
@@ -19,14 +17,14 @@ class FineTuneTargetConfig:
 
     name: str
     model_id: str
-    machine: str | None = None
-    backend: Literal["opensource", "bedrock"] | None = None
+    machine: Optional[str] = None
+    backend: Optional[Literal["opensource", "bedrock"]] = None
     # OpenSource overrides (None → inherit from FineTunerConfig.opensource)
-    num_epochs: int | None = None
-    batch_size: int | None = None
-    lora_r: int | None = None
+    num_epochs: Optional[int] = None
+    batch_size: Optional[int] = None
+    lora_r: Optional[int] = None
     # Bedrock overrides
-    customization_type: str | None = None
+    customization_type: Optional[str] = None
 
 
 @dataclass
@@ -59,7 +57,7 @@ class OpenSourceConfig:
     use_bf16: bool = True
     use_flash_attention: bool = False
     gradient_checkpointing: bool = True
-    hf_token: str | None = None
+    hf_token: Optional[str] = None
 
 
 @dataclass

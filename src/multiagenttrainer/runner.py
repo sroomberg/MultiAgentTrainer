@@ -1,7 +1,5 @@
 """Run autonomous training experiments via autoresearch."""
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import re
@@ -12,18 +10,15 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Optional
 
 import git as gitpython
 from rich.console import Console
 
-from .config import AutoresearchConfig, ExecutionConfig, TrainingConfig
+from .config import AutoresearchConfig, ExecutionConfig, MachineConfig, TrainingConfig
 from .executor import Executor, build_executor, build_executor_for_machine
+from .notifications.base import Notifier
 from .progress import new_progress, write_progress
-
-if TYPE_CHECKING:
-    from .config import MachineConfig
-    from .notifications.base import Notifier
 
 log = logging.getLogger(__name__)
 
@@ -35,11 +30,11 @@ class ExperimentResult:
     experiment_id: int
     exit_code: int
     duration: float
-    val_bpb: float | None = None
+    val_bpb: Optional[float] = None
     stdout: str = ""
     stderr: str = ""
-    error: str | None = None
-    machine: str | None = None
+    error: Optional[str] = None
+    machine: Optional[str] = None
 
 
 class Runner:
@@ -49,11 +44,11 @@ class Runner:
         self,
         autoresearch_cfg: AutoresearchConfig,
         training_cfg: TrainingConfig,
-        console: Console | None = None,
-        executor: Executor | None = None,
+        console: Optional[Console] = None,
+        executor: Optional[Executor] = None,
         name: str = "",
-        notifier: Notifier | None = None,
-        machines: list[MachineConfig] | None = None,
+        notifier: Optional[Notifier] = None,
+        machines: Optional[list[MachineConfig]] = None,
     ) -> None:
         self.ar_cfg = autoresearch_cfg
         self.tr_cfg = training_cfg
@@ -64,7 +59,7 @@ class Runner:
         self.name = name or self.run_id
         self.notifier = notifier
 
-    def setup_workspace(self, corpus_path: Path | None = None) -> Path:
+    def setup_workspace(self, corpus_path: Optional[Path] = None) -> Path:
         """Clone or copy autoresearch into a working directory.
 
         If *corpus_path* is provided, inject it as custom training data.
@@ -328,8 +323,8 @@ class Runner:
         ar_dir: str,
         prompt: str,
         experiment_id: int,
-        executor: Executor | None = None,
-        agent_command: str | None = None,
+        executor: Optional[Executor] = None,
+        agent_command: Optional[str] = None,
     ) -> ExperimentResult:
         """Run a single experiment by invoking the agent command via the executor."""
         start = time.monotonic()
@@ -357,7 +352,7 @@ class Runner:
         )
 
     @staticmethod
-    def _parse_val_bpb(output: str) -> float | None:
+    def _parse_val_bpb(output: str) -> Optional[float]:
         """Extract the last val_bpb value from agent output."""
         matches = re.findall(r"val_bpb[=:\s]+([0-9]+\.?[0-9]*)", output)
         if matches:

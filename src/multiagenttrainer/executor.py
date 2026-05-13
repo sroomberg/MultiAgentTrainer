@@ -1,16 +1,13 @@
 """Execution targets: local subprocess, SSH remote host, or Docker container."""
 
-from __future__ import annotations
-
 import asyncio
 import shlex
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from .config import ExecutionConfig, MachineConfig
+from .config import ExecutionConfig, MachineConfig
 
 
 @dataclass
@@ -18,7 +15,7 @@ class RunResult:
     exit_code: int
     stdout: str
     stderr: str
-    error: str | None = None
+    error: Optional[str] = None
 
 
 class Executor(ABC):
@@ -57,7 +54,9 @@ class LocalExecutor(Executor):
 class SSHExecutor(Executor):
     """Run commands on a remote host via SSH, uploading files with rsync."""
 
-    def __init__(self, host: str, remote_base: str, ssh_key: str | None = None) -> None:
+    def __init__(
+        self, host: str, remote_base: str, ssh_key: Optional[str] = None
+    ) -> None:
         self.host = host
         self.remote_base = remote_base.rstrip("/")
         self._ssh_opts = _ssh_opts(ssh_key)
@@ -166,7 +165,7 @@ async def _communicate(
     )
 
 
-def _ssh_opts(key_path: str | None) -> str:
+def _ssh_opts(key_path: Optional[str]) -> str:
     opts = "-o StrictHostKeyChecking=no -o BatchMode=yes"
     if key_path:
         opts += f" -i {key_path}"

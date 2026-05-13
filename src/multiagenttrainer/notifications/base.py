@@ -1,9 +1,8 @@
 """Notification abstractions for training/fine-tuning failure alerts."""
 
-from __future__ import annotations
-
 import abc
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
@@ -13,7 +12,7 @@ class FailureEvent:
     run_id: str
     backend: str  # "opensource", "bedrock", "runner"
     error: str
-    model: str | None = None
+    model: Optional[str] = None
     timestamp: str = ""
     details: dict[str, str] = field(default_factory=dict)
 

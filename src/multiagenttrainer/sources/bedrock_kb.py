@@ -1,10 +1,9 @@
 """Data source for AWS Bedrock knowledge bases."""
 
-from __future__ import annotations
-
 import json
 import logging
 from pathlib import Path
+from typing import Optional
 
 from .base import DataSource
 
@@ -24,7 +23,7 @@ class BedrockKnowledgeBaseSource(DataSource):
         region: str = "us-east-1",
         query: str = "training data",
         max_results: int = 100,
-        name: str | None = None,
+        name: Optional[str] = None,
     ) -> None:
         self.knowledge_base_id = knowledge_base_id
         self.region = region
@@ -40,7 +39,7 @@ class BedrockKnowledgeBaseSource(DataSource):
         client = boto3.client("bedrock-agent-runtime", region_name=self.region)
 
         results: list[dict[str, object]] = []
-        next_token: str | None = None
+        next_token: Optional[str] = None
 
         while len(results) < self.max_results:
             kwargs: dict[str, object] = {

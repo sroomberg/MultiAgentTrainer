@@ -1,10 +1,9 @@
 """Ingest data from configured sources into a training corpus."""
 
-from __future__ import annotations
-
 import fnmatch
 import logging
 from pathlib import Path
+from typing import Optional
 
 from rich.console import Console
 
@@ -58,9 +57,9 @@ class Ingester:
         self,
         sources: list[DataSource],
         staging_dir: Path,
-        console: Console | None = None,
-        include: list[str] | None = None,
-        exclude: list[str] | None = None,
+        console: Optional[Console] = None,
+        include: Optional[list[str]] = None,
+        exclude: Optional[list[str]] = None,
     ) -> None:
         self.sources = sources
         self.staging_dir = staging_dir

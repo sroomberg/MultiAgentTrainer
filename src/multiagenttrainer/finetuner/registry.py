@@ -1,24 +1,20 @@
 """Factory for creating FineTuner instances from config."""
 
-from __future__ import annotations
-
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Optional
 
 from rich.console import Console
 
+from ..notifications.base import Notifier
 from .config import FineTunerConfig
 from .finetuner import BedrockFineTuner, FineTuner, OpenSourceFineTuner
 from .multi import MultiTargetFineTuner
-
-if TYPE_CHECKING:
-    from ..notifications.base import Notifier
 
 
 def create_fine_tuner(
     cfg: FineTunerConfig,
     console: Console,
-    notifier: Notifier | None = None,
+    notifier: Optional[Notifier] = None,
 ) -> FineTuner:
     """Return the appropriate FineTuner for the configured backend."""
     jobs_dir = Path(cfg.jobs_dir)
@@ -35,7 +31,7 @@ def create_fine_tuner(
 def create_multi_target_fine_tuner(
     cfg: FineTunerConfig,
     console: Console,
-    notifier: Notifier | None = None,
+    notifier: Optional[Notifier] = None,
 ) -> MultiTargetFineTuner:
     """Return a MultiTargetFineTuner for all targets in the config."""
     if not cfg.targets:

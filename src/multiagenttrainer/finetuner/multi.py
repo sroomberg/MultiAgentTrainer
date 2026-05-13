@@ -1,20 +1,16 @@
 """Multi-target fine-tuning orchestrator."""
 
-from __future__ import annotations
-
 import dataclasses
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Optional
 
 from rich.console import Console
 
+from ..notifications.base import Notifier
 from .config import FineTunerConfig, FineTuneTargetConfig
 from .finetuner import BedrockFineTuner, FineTuneJob, FineTuner, OpenSourceFineTuner
-
-if TYPE_CHECKING:
-    from ..notifications.base import Notifier
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +32,7 @@ class MultiTargetFineTuner:
         self,
         base_cfg: FineTunerConfig,
         console: Console,
-        notifier: Notifier | None = None,
+        notifier: Optional[Notifier] = None,
     ) -> None:
         self.base_cfg = base_cfg
         self.console = console

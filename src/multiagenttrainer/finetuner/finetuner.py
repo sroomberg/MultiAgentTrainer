@@ -1,7 +1,5 @@
 """Fine-tuning backends: FineTuner ABC, OpenSourceFineTuner, BedrockFineTuner."""
 
-from __future__ import annotations
-
 import abc
 import json
 import os
@@ -9,15 +7,13 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal, Optional
 
 from rich.console import Console
 
+from ..notifications.base import Notifier
 from .config import BedrockConfig, OpenSourceConfig
 from .dataset import chunk_corpus, write_jsonl
-
-if TYPE_CHECKING:
-    from ..notifications.base import Notifier
 
 
 @dataclass
@@ -29,9 +25,9 @@ class FineTuneJob:
     status: Literal["running", "completed", "failed", "cancelled"]
     model: str
     created_at: str  # ISO-8601
-    output_model: str | None = None
+    output_model: Optional[str] = None
     metrics: dict[str, float] = field(default_factory=dict)
-    error: str | None = None
+    error: Optional[str] = None
     failure_notified: bool = False
 
     @staticmethod
@@ -45,14 +41,14 @@ class FineTuneJob:
         )
 
     @classmethod
-    def load(cls, jobs_dir: Path, job_id: str) -> FineTuneJob | None:
+    def load(cls, jobs_dir: Path, job_id: str) -> Optional["FineTuneJob"]:
         path = jobs_dir / f"{cls._safe_id(job_id)}.json"
         if not path.exists():
             return None
         return cls(**json.loads(path.read_text()))
 
     @classmethod
-    def list_all(cls, jobs_dir: Path) -> list[FineTuneJob]:
+    def list_all(cls, jobs_dir: Path) -> list["FineTuneJob"]:
         if not jobs_dir.exists():
             return []
         jobs = []
@@ -76,7 +72,7 @@ class FineTuner(abc.ABC):
         self,
         jobs_dir: Path,
         console: Console,
-        notifier: Notifier | None = None,
+        notifier: Optional[Notifier] = None,
     ) -> None:
         self.jobs_dir = jobs_dir
         self.console = console
@@ -121,7 +117,7 @@ class OpenSourceFineTuner(FineTuner):
         cfg: OpenSourceConfig,
         jobs_dir: Path,
         console: Console,
-        notifier: Notifier | None = None,
+        notifier: Optional[Notifier] = None,
     ) -> None:
         super().__init__(jobs_dir, console, notifier)
         self.cfg = cfg
@@ -327,7 +323,7 @@ class BedrockFineTuner(FineTuner):
         cfg: BedrockConfig,
         jobs_dir: Path,
         console: Console,
-        notifier: Notifier | None = None,
+        notifier: Optional[Notifier] = None,
     ) -> None:
         super().__init__(jobs_dir, console, notifier)
         self.cfg = cfg

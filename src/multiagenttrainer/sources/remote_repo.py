@@ -1,9 +1,8 @@
 """Data source for remote git repositories (any git URL)."""
 
-from __future__ import annotations
-
 import shutil
 from pathlib import Path
+from typing import Optional
 
 import git as gitpython
 
@@ -16,8 +15,8 @@ class RemoteRepoSource(DataSource):
     def __init__(
         self,
         url: str,
-        branch: str | None = None,
-        name: str | None = None,
+        branch: Optional[str] = None,
+        name: Optional[str] = None,
     ) -> None:
         self.url = url
         self.branch = branch

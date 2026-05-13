@@ -1,12 +1,11 @@
 """Data source for all accessible repos in a GitHub organization."""
 
-from __future__ import annotations
-
 import json
 import logging
 import re
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 from .base import DataSource
 from .remote_repo import RemoteRepoSource
@@ -94,7 +93,7 @@ class GitHubOrgSource(DataSource):
         url: str,
         max_repos: int = 100,
         visibility: str = "all",
-        name: str | None = None,
+        name: Optional[str] = None,
     ) -> None:
         m = _GH_ORG_RE.match(url)
         if not m:

@@ -1,9 +1,8 @@
 """Data source for a single GitHub repository URL."""
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
+from typing import Optional
 
 from .base import DataSource
 from .remote_repo import RemoteRepoSource
@@ -19,8 +18,8 @@ class GitHubRepoSource(DataSource):
     def __init__(
         self,
         url: str,
-        branch: str | None = None,
-        name: str | None = None,
+        branch: Optional[str] = None,
+        name: Optional[str] = None,
     ) -> None:
         m = _GH_REPO_RE.match(url)
         if not m:

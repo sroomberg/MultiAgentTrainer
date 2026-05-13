@@ -1,10 +1,9 @@
 """Base class for data sources."""
 
-from __future__ import annotations
-
 import abc
 import shutil
 from pathlib import Path
+from typing import Optional
 
 
 class DataSource(abc.ABC):
@@ -33,5 +32,5 @@ class DataSource(abc.ABC):
         return dest
 
     @staticmethod
-    def _branch_suffix(branch: str | None) -> str:
+    def _branch_suffix(branch: Optional[str]) -> str:
         return f" ({branch})" if branch else ""

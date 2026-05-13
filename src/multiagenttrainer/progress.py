@@ -5,12 +5,11 @@ after every experiment so that ``mat watch`` can display a live dashboard
 across multiple concurrent runs.
 """
 
-from __future__ import annotations
-
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass
@@ -29,12 +28,12 @@ class RunProgress:
         return len(self.experiments)
 
     @property
-    def best_val_bpb(self) -> float | None:
+    def best_val_bpb(self) -> Optional[float]:
         vals = [e["val_bpb"] for e in self.experiments if e.get("val_bpb") is not None]
         return min(vals) if vals else None
 
     @property
-    def last_val_bpb(self) -> float | None:
+    def last_val_bpb(self) -> Optional[float]:
         for e in reversed(self.experiments):
             if e.get("val_bpb") is not None:
                 return e["val_bpb"]
@@ -55,7 +54,7 @@ def write_progress(path: Path, progress: RunProgress) -> None:
     path.write_text(json.dumps(asdict(progress), indent=2))
 
 
-def read_progress(path: Path) -> RunProgress | None:
+def read_progress(path: Path) -> Optional[RunProgress]:
     try:
         data = json.loads(path.read_text())
         return RunProgress(**data)

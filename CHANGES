@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.0.1 — 2026-05-13
+- Remove `from __future__ import annotations` from all source files; use `Optional[X]` from `typing` instead
+- Suppress `UP045` ruff rule to honour `Optional[X]` project style
+
 ## v2.0.0 — 2026-05-13
 - **Multi-machine training**: add top-level `machines` config block of named execution targets (local/SSH/Docker); `mat train` distributes experiments concurrently across all machines via `asyncio.gather`, with each machine running its own sequential batch
 - **Per-machine model right-sizing**: each `MachineConfig` accepts an optional `agent_command` override so different hosts can run different-sized models (e.g. Opus on a large GPU, Haiku on a small one)

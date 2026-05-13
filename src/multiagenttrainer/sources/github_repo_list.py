@@ -1,9 +1,8 @@
 """Data source for an explicit list of GitHub repository URLs."""
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
+from typing import Optional
 
 from .base import DataSource
 from .remote_repo import RemoteRepoSource
@@ -35,7 +34,7 @@ class GitHubRepoListSource(DataSource):
     def __init__(
         self,
         repos: list[str],
-        branch: str | None = None,
+        branch: Optional[str] = None,
         name: str = "github-repos",
     ) -> None:
         if not repos:

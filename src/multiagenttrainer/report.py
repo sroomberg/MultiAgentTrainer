@@ -1,9 +1,8 @@
 """Generate markdown reports for training runs."""
 
-from __future__ import annotations
-
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from .config import TrainerConfig
 from .runner import ExperimentResult
@@ -43,8 +42,8 @@ def generate_report(
         ]
     )
 
-    best_bpb: float | None = None
-    best_idx: int | None = None
+    best_bpb: Optional[float] = None
+    best_idx: Optional[int] = None
 
     for r in results:
         status = "✅" if r.exit_code == 0 else "❌"

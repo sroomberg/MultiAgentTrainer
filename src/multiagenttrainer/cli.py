@@ -1,11 +1,9 @@
 """CLI entry point."""
 
-from __future__ import annotations
-
 import asyncio
 import time
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
@@ -42,15 +40,15 @@ console = Console()
 @app.command()
 def train(
     config: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--config", "-c", help="Path to config YAML file"),
     ] = None,
     max_experiments: Annotated[
-        int | None,
+        Optional[int],
         typer.Option("--max-experiments", "-n", help="Override max experiments"),
     ] = None,
     output_dir: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--output-dir", "-o", help="Override output directory"),
     ] = None,
     name: Annotated[
@@ -58,7 +56,7 @@ def train(
         typer.Option("--name", help="Label for this run (shown in mat watch)"),
     ] = "",
     repos: Annotated[
-        list[str] | None,
+        Optional[list[str]],
         typer.Option("--repo", "-r", help="Repo URL or owner/repo. Repeatable."),
     ] = None,
 ) -> None:
@@ -82,7 +80,7 @@ def train(
     staging = Path(cfg.training.output_dir).resolve() / ".staging"
     ingester = Ingester(cfg.sources, staging, console)
 
-    corpus_path: Path | None = None
+    corpus_path: Optional[Path] = None
     if cfg.sources:
         console.print("\n[bold]Ingesting data sources…[/bold]")
         ingester.fetch_all()
@@ -117,11 +115,11 @@ def train(
 @app.command("sources")
 def list_sources(
     config: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--config", "-c", help="Path to config YAML file"),
     ] = None,
     repos: Annotated[
-        list[str] | None,
+        Optional[list[str]],
         typer.Option("--repo", "-r", help="Repo URL or owner/repo. Repeatable."),
     ] = None,
 ) -> None:
@@ -143,15 +141,15 @@ def list_sources(
 @app.command("ingest")
 def ingest_cmd(
     config: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--config", "-c", help="Path to config YAML file"),
     ] = None,
     output: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--output", "-o", help="Corpus output path"),
     ] = None,
     repos: Annotated[
-        list[str] | None,
+        Optional[list[str]],
         typer.Option("--repo", "-r", help="Repo URL or owner/repo. Repeatable."),
     ] = None,
 ) -> None:
@@ -178,7 +176,7 @@ def ingest_cmd(
 @app.command("watch")
 def watch(
     output_dir: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--output-dir", "-o", help="Training runs directory"),
     ] = None,
     interval: Annotated[
@@ -189,7 +187,7 @@ def watch(
     """Live dashboard showing progress across all active training runs."""
     runs_dir = (output_dir or Path("./training-runs")).resolve()
 
-    def _fmt(val: float | None) -> str:
+    def _fmt(val: Optional[float]) -> str:
         return f"{val:.4f}" if val is not None else "—"
 
     def _build_table() -> Table:
@@ -244,7 +242,7 @@ def watch(
 @app.command("status")
 def status(
     output_dir: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--output-dir", "-o", help="Training runs directory"),
     ] = None,
 ) -> None:
@@ -273,7 +271,7 @@ def status(
 # ---------------------------------------------------------------------------
 
 
-def _require_finetuner_config(config: Path | None) -> tuple:
+def _require_finetuner_config(config: Optional[Path]) -> tuple:
     cfg = load_config(config)
     if cfg.finetuner is None:
         console.print(
@@ -304,11 +302,11 @@ def _print_job(job: FineTuneJob) -> None:
 @finetune_app.command("start")
 def finetune_start(
     config: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--config", "-c", help="Path to config YAML"),
     ] = None,
     corpus: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--corpus", help="Corpus file (defaults to last ingest output)"),
     ] = None,
     name: Annotated[
@@ -374,7 +372,7 @@ def finetune_start(
 def finetune_status(
     job_id: Annotated[str, typer.Argument(help="Job ID to check")],
     config: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--config", "-c", help="Path to config YAML"),
     ] = None,
 ) -> None:
@@ -389,7 +387,7 @@ def finetune_status(
 def finetune_cancel(
     job_id: Annotated[str, typer.Argument(help="Job ID to cancel")],
     config: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--config", "-c", help="Path to config YAML"),
     ] = None,
 ) -> None:
@@ -402,7 +400,7 @@ def finetune_cancel(
 @finetune_app.command("list")
 def finetune_list(
     config: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Option("--config", "-c", help="Path to config YAML"),
     ] = None,
 ) -> None:
