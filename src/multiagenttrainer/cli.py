@@ -13,7 +13,11 @@ from rich.live import Live
 from rich.table import Table
 
 from .config import load_config
-from .finetuner import FineTuneJob, create_fine_tuner
+from .finetuner import (
+    FineTuneJob,
+    create_fine_tuner,
+    create_multi_target_fine_tuner,
+)
 from .ingest import Ingester
 from .notifications import build_notifier
 from .progress import find_progress_files, read_progress
@@ -91,7 +95,12 @@ def train(
     # Setup and run
     notifier = build_notifier(cfg.notifications.ses if cfg.notifications else None)
     runner = Runner(
-        cfg.autoresearch, cfg.training, console, name=name, notifier=notifier
+        cfg.autoresearch,
+        cfg.training,
+        console,
+        name=name,
+        notifier=notifier,
+        machines=cfg.machines or [],
     )
     workspace = runner.setup_workspace(corpus_path)
 
@@ -308,7 +317,13 @@ def finetune_start(
     ] = "finetune",
 ) -> None:
     """Prepare dataset from corpus and start a fine-tuning job."""
-    cfg, tuner = _require_finetuner_config(config)
+    cfg = load_config(config)
+    if cfg.finetuner is None:
+        console.print(
+            "[red]No [bold]finetuner[/bold] section found in config. "
+            "Add one to your multiagenttrainer.yaml.[/red]"
+        )
+        raise typer.Exit(1)
 
     if corpus is None:
         default_corpus = (
@@ -323,6 +338,25 @@ def finetune_start(
             )
             raise typer.Exit(1)
 
+    notifier = build_notifier(cfg.notifications.ses if cfg.notifications else None)
+
+    if cfg.finetuner.targets:
+        # Multi-target path: one job per (model, machine) pairing.
+        multi = create_multi_target_fine_tuner(cfg.finetuner, console, notifier)
+        console.print("\n[bold]Multi-target fine-tuning:[/bold]")
+        for desc in multi.describe_targets():
+            console.print(f"  {desc}")
+        console.print(f"[bold]Corpus:[/bold] {corpus}\n")
+
+        console.print("[bold]Starting all targets…[/bold]")
+        jobs = multi.start_all(corpus, name)
+        for job in jobs:
+            console.print()
+            _print_job(job)
+        return
+
+    # Single-target path (original behaviour).
+    tuner = create_fine_tuner(cfg.finetuner, console, notifier)
     console.print(f"\n[bold]Backend:[/bold] {tuner.describe()}")
     console.print(f"[bold]Corpus:[/bold]  {corpus}\n")
 

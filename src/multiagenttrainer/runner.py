@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import shlex
@@ -16,11 +17,12 @@ from typing import TYPE_CHECKING
 import git as gitpython
 from rich.console import Console
 
-from .config import AutoresearchConfig, TrainingConfig
-from .executor import Executor, build_executor
+from .config import AutoresearchConfig, ExecutionConfig, TrainingConfig
+from .executor import Executor, build_executor, build_executor_for_machine
 from .progress import new_progress, write_progress
 
 if TYPE_CHECKING:
+    from .config import MachineConfig
     from .notifications.base import Notifier
 
 log = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ class ExperimentResult:
     stdout: str = ""
     stderr: str = ""
     error: str | None = None
+    machine: str | None = None
 
 
 class Runner:
@@ -50,11 +53,13 @@ class Runner:
         executor: Executor | None = None,
         name: str = "",
         notifier: Notifier | None = None,
+        machines: list[MachineConfig] | None = None,
     ) -> None:
         self.ar_cfg = autoresearch_cfg
         self.tr_cfg = training_cfg
         self.console = console or Console()
         self.run_id = uuid.uuid4().hex[:8]
+        self.machines: list[MachineConfig] = machines or []
         self.executor: Executor = executor or build_executor(training_cfg.execution)
         self.name = name or self.run_id
         self.notifier = notifier
@@ -108,7 +113,17 @@ class Runner:
         self,
         workspace: Path,
     ) -> list[ExperimentResult]:
-        """Run up to ``max_experiments`` autonomous experiments."""
+        """Run up to ``max_experiments`` experiments, distributing across machines
+        if multiple are configured."""
+        if self.machines:
+            return await self._run_multi_machine(workspace)
+        return await self._run_single_machine(workspace)
+
+    # ------------------------------------------------------------------
+    # Single-machine path (original behaviour, fully preserved)
+    # ------------------------------------------------------------------
+
+    async def _run_single_machine(self, workspace: Path) -> list[ExperimentResult]:
         ar_dir = workspace / "autoresearch"
         results: list[ExperimentResult] = []
 
@@ -122,18 +137,12 @@ class Runner:
             f"— max {self.tr_cfg.max_experiments} experiments[/bold]\n"
         )
 
-        # Upload workspace to the execution target (no-op for LocalExecutor).
-        exec_cfg = self.tr_cfg.execution
-        suffix = f"/{self.run_id}/autoresearch"
-        if exec_cfg.type == "ssh":
-            remote_ar_dir = exec_cfg.remote_dir.rstrip("/") + suffix
-        elif exec_cfg.type == "docker":
-            remote_ar_dir = exec_cfg.container_dir.rstrip("/") + suffix
-        else:
-            remote_ar_dir = str(ar_dir)
+        remote_ar_dir = _remote_ar_dir(self.tr_cfg.execution, self.run_id, ar_dir)
 
-        if exec_cfg.type in ("ssh", "docker"):
-            self.console.print(f"  [dim]Uploading workspace → {remote_ar_dir}…[/dim]")
+        if self.tr_cfg.execution.type in ("ssh", "docker"):
+            self.console.print(
+                f"  [dim]Uploading workspace → {remote_ar_dir}…[/dim]"
+            )
             await self.executor.upload(ar_dir, remote_ar_dir)
             self.console.print("  [dim]Upload complete[/dim]")
 
@@ -181,7 +190,6 @@ class Runner:
             )
             write_progress(progress_path, progress)
 
-            # After the first experiment, subsequent prompts continue iteration.
             prompt = (
                 "Great, let's kick off the next experiment. "
                 "Review the results so far and try something new."
@@ -192,20 +200,145 @@ class Runner:
 
         return results
 
+    # ------------------------------------------------------------------
+    # Multi-machine path
+    # ------------------------------------------------------------------
+
+    async def _run_multi_machine(self, workspace: Path) -> list[ExperimentResult]:
+        """Distribute experiments across all configured machines concurrently."""
+        ar_dir = workspace / "autoresearch"
+        output_dir = Path(self.tr_cfg.output_dir).resolve()
+        progress_path = output_dir / f"progress-{self.run_id}.json"
+        progress = new_progress(self.run_id, self.name, self.tr_cfg.max_experiments)
+        write_progress(progress_path, progress)
+
+        n = len(self.machines)
+        total = self.tr_cfg.max_experiments
+        self.console.print(
+            f"\n[bold]Starting multi-machine run [cyan]{self.run_id}[/cyan] "
+            f"— {n} machines, max {total} experiments[/bold]\n"
+        )
+
+        # Divide experiment IDs evenly; first (total % n) machines get one extra.
+        counts = [total // n + (1 if i < total % n else 0) for i in range(n)]
+
+        lock = asyncio.Lock()
+        results: list[ExperimentResult] = []
+
+        batches = []
+        offset = 0
+        for machine, count in zip(self.machines, counts, strict=True):
+            exp_ids = range(offset + 1, offset + count + 1)
+            batches.append(
+                self._run_machine_batch(
+                    machine, ar_dir, exp_ids, results, progress, progress_path, lock
+                )
+            )
+            offset += count
+
+        await asyncio.gather(*batches)
+
+        progress.status = "done"
+        write_progress(progress_path, progress)
+
+        results.sort(key=lambda r: r.experiment_id)
+        return results
+
+    async def _run_machine_batch(
+        self,
+        machine: MachineConfig,
+        ar_dir: Path,
+        experiment_ids: range,
+        results: list[ExperimentResult],
+        progress: object,
+        progress_path: Path,
+        lock: asyncio.Lock,
+    ) -> None:
+        executor = build_executor_for_machine(machine)
+        remote_ar_dir = _remote_ar_dir(machine.execution, self.run_id, ar_dir)
+
+        if machine.execution.type in ("ssh", "docker"):
+            self.console.print(
+                f"  [dim][{machine.name}] Uploading workspace → {remote_ar_dir}…[/dim]"
+            )
+            await executor.upload(ar_dir, remote_ar_dir)
+
+        agent_command = machine.agent_command or self.tr_cfg.agent_command
+
+        prompt = (
+            "Hi have a look at program.md and let's kick off a new experiment! "
+            "let's do the setup first."
+        )
+
+        for exp_id in experiment_ids:
+            result = await self._run_one(
+                remote_ar_dir, prompt, exp_id, executor, agent_command
+            )
+            result.machine = machine.name
+
+            icon = "✅" if result.exit_code == 0 else "❌"
+            bpb = f" val_bpb={result.val_bpb:.4f}" if result.val_bpb else ""
+            self.console.print(
+                f"  [{machine.name}] {icon} experiment {exp_id} — "
+                f"{result.duration:.1f}s, exit {result.exit_code}{bpb}"
+                + (f" ({result.error})" if result.error else "")
+            )
+
+            if result.exit_code != 0 and self.notifier:
+                from .notifications.base import FailureEvent
+
+                self.notifier.notify_failure(
+                    FailureEvent(
+                        run_id=self.run_id,
+                        backend="runner",
+                        error=result.error or f"exit code {result.exit_code}",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        details={
+                            "experiment": str(exp_id),
+                            "machine": machine.name,
+                        },
+                    )
+                )
+
+            async with lock:
+                results.append(result)
+                progress.experiments.append(  # type: ignore[attr-defined]
+                    {
+                        "experiment_id": result.experiment_id,
+                        "exit_code": result.exit_code,
+                        "duration": result.duration,
+                        "val_bpb": result.val_bpb,
+                        "error": result.error,
+                        "machine": machine.name,
+                    }
+                )
+                write_progress(progress_path, progress)  # type: ignore[arg-type]
+
+            prompt = (
+                "Great, let's kick off the next experiment. "
+                "Review the results so far and try something new."
+            )
+
+    # ------------------------------------------------------------------
+    # Shared helpers
+    # ------------------------------------------------------------------
+
     async def _run_one(
         self,
         ar_dir: str,
         prompt: str,
         experiment_id: int,
+        executor: Executor | None = None,
+        agent_command: str | None = None,
     ) -> ExperimentResult:
         """Run a single experiment by invoking the agent command via the executor."""
         start = time.monotonic()
-
-        cmd = self.tr_cfg.agent_command
+        executor = executor or self.executor
+        cmd = agent_command or self.tr_cfg.agent_command
         if "{prompt}" in cmd:
             cmd = cmd.replace("{prompt}", shlex.quote(prompt))
 
-        result = await self.executor.run(
+        result = await executor.run(
             cmd=cmd,
             cwd=ar_dir,
             timeout=self.ar_cfg.train_time + 120,
@@ -230,3 +363,13 @@ class Runner:
         if matches:
             return float(matches[-1])
         return None
+
+
+def _remote_ar_dir(exec_cfg: ExecutionConfig, run_id: str, ar_dir: Path) -> str:
+    """Derive the remote working directory for a given execution config."""
+    suffix = f"/{run_id}/autoresearch"
+    if exec_cfg.type == "ssh":
+        return exec_cfg.remote_dir.rstrip("/") + suffix
+    if exec_cfg.type == "docker":
+        return exec_cfg.container_dir.rstrip("/") + suffix
+    return str(ar_dir)

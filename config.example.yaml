@@ -1,6 +1,35 @@
 # MultiAgentTrainer configuration
 # Copy to multiagenttrainer.yaml in your working directory.
 
+# Named execution targets — referenced by training and finetuner.targets.
+# Each machine can carry its own agent_command to right-size the model to
+# the instance (e.g. run a large model on a big GPU host, a small model on
+# a cheaper one).  Omit this section to run everything on the local machine.
+machines:
+  - name: gpu-large
+    execution:
+      type: ssh
+      ssh_host: trainer1.example.com
+      ssh_key: ~/.ssh/id_ed25519
+      remote_dir: /tmp/mat-runs
+    # Override the global agent_command to use a larger model on this host.
+    agent_command: >-
+      claude -p {prompt}
+      --allowedTools "Bash,Read,Edit"
+      --permission-mode acceptEdits
+      --model claude-opus-4-7
+
+  - name: gpu-small
+    execution:
+      type: ssh
+      ssh_host: trainer2.example.com
+      remote_dir: /tmp/mat-runs
+    agent_command: >-
+      claude -p {prompt}
+      --allowedTools "Bash,Read,Edit"
+      --permission-mode acceptEdits
+      --model claude-haiku-4-5
+
 autoresearch:
   repo: "https://github.com/karpathy/autoresearch"  # or a local path
   branch: "master"
@@ -88,3 +117,28 @@ finetuner:
     batch_size: 8
     learning_rate: 1e-5
     job_name_prefix: mat-finetune
+
+  # Multi-target fine-tuning: one job per (model, machine) pairing.
+  # All targets start concurrently. Each target inherits the backend defaults
+  # above and overrides only the fields listed here.
+  # The machine field is metadata that documents which host this target is
+  # sized for; assign each OpenSource target to a distinct GPU to avoid OOM.
+  targets:
+    - name: llama-3b-large
+      model_id: meta-llama/Llama-3.2-3B
+      machine: gpu-large        # big GPU for the bigger model
+      backend: opensource
+      num_epochs: 3
+      batch_size: 2
+
+    - name: llama-1b-small
+      model_id: meta-llama/Llama-3.2-1B
+      machine: gpu-small        # smaller GPU for the smaller model
+      backend: opensource
+      num_epochs: 5
+      batch_size: 4
+
+    - name: titan-bedrock
+      model_id: amazon.titan-text-lite-v1
+      backend: bedrock
+      customization_type: FINE_TUNING

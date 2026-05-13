@@ -8,7 +8,12 @@ from typing import Literal
 
 import yaml
 
-from .finetuner.config import BedrockConfig, FineTunerConfig, OpenSourceConfig
+from .finetuner.config import (
+    BedrockConfig,
+    FineTunerConfig,
+    FineTuneTargetConfig,
+    OpenSourceConfig,
+)
 from .notifications.ses import SESConfig
 from .sources import DataSource, create_source
 
@@ -54,6 +59,19 @@ class ExecutionConfig:
 
 
 @dataclass
+class MachineConfig:
+    """A named execution target for distributing training across multiple machines.
+
+    Each machine can override the default agent_command to run a different
+    model, enabling right-sizing — pairing compute to the model it will train.
+    """
+
+    name: str
+    execution: ExecutionConfig = field(default_factory=ExecutionConfig)
+    agent_command: str | None = None  # overrides training.agent_command if set
+
+
+@dataclass
 class TrainingConfig:
     """Settings for autonomous training runs."""
 
@@ -77,6 +95,7 @@ class TrainerConfig:
     source_configs: list[dict[str, object]] = field(default_factory=list)
     finetuner: FineTunerConfig | None = None
     notifications: NotificationsConfig | None = None
+    machines: list[MachineConfig] = field(default_factory=list)
 
 
 def load_config(config_path: Path | None = None) -> TrainerConfig:
@@ -105,21 +124,22 @@ def load_config(config_path: Path | None = None) -> TrainerConfig:
 
     # Training settings
     tr_data = data.get("training", {})
-    ex_data = tr_data.get("execution", {})
-    execution = ExecutionConfig(
-        type=ex_data.get("type", "local"),
-        ssh_host=ex_data.get("ssh_host"),
-        ssh_key=ex_data.get("ssh_key"),
-        remote_dir=ex_data.get("remote_dir", "/tmp/mat-runs"),
-        container=ex_data.get("container"),
-        container_dir=ex_data.get("container_dir", "/tmp/mat-runs"),
-    )
     training = TrainingConfig(
         agent_command=tr_data.get("agent_command", TrainingConfig.agent_command),
         max_experiments=tr_data.get("max_experiments", 50),
         output_dir=tr_data.get("output_dir", "./training-runs"),
-        execution=execution,
+        execution=_parse_execution_config(tr_data.get("execution", {})),
     )
+
+    # Named machines
+    machines: list[MachineConfig] = [
+        MachineConfig(
+            name=m["name"],
+            execution=_parse_execution_config(m.get("execution", {})),
+            agent_command=m.get("agent_command"),
+        )
+        for m in data.get("machines", [])
+    ]
 
     # Data sources
     raw_sources: list[dict[str, object]] = data.get("sources", [])
@@ -146,6 +166,18 @@ def load_config(config_path: Path | None = None) -> TrainerConfig:
         source_configs=raw_sources,
         finetuner=finetuner,
         notifications=notifications,
+        machines=machines,
+    )
+
+
+def _parse_execution_config(data: dict) -> ExecutionConfig:
+    return ExecutionConfig(
+        type=data.get("type", "local"),
+        ssh_host=data.get("ssh_host"),
+        ssh_key=data.get("ssh_key"),
+        remote_dir=data.get("remote_dir", "/tmp/mat-runs"),
+        container=data.get("container"),
+        container_dir=data.get("container_dir", "/tmp/mat-runs"),
     )
 
 
@@ -185,11 +217,26 @@ def _parse_finetuner_config(data: dict[str, object]) -> FineTunerConfig:
         job_name_prefix=br_data.get("job_name_prefix", "mat-finetune"),  # type: ignore[arg-type]
     )
 
+    targets: list[FineTuneTargetConfig] = [
+        FineTuneTargetConfig(
+            name=t["name"],  # type: ignore[arg-type]
+            model_id=t["model_id"],  # type: ignore[arg-type]
+            machine=t.get("machine"),  # type: ignore[arg-type]
+            backend=t.get("backend"),  # type: ignore[arg-type]
+            num_epochs=t.get("num_epochs"),  # type: ignore[arg-type]
+            batch_size=t.get("batch_size"),  # type: ignore[arg-type]
+            lora_r=t.get("lora_r"),  # type: ignore[arg-type]
+            customization_type=t.get("customization_type"),  # type: ignore[arg-type]
+        )
+        for t in data.get("targets", [])  # type: ignore[union-attr]
+    ]
+
     return FineTunerConfig(
         backend=data.get("backend", "opensource"),  # type: ignore[arg-type]
         jobs_dir=data.get("jobs_dir", "./finetune-jobs"),  # type: ignore[arg-type]
         opensource=opensource,
         bedrock=bedrock,
+        targets=targets,
     )
 
 

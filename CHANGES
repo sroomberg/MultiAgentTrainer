@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.0.0 — 2026-05-13
+- **Multi-machine training**: add top-level `machines` config block of named execution targets (local/SSH/Docker); `mat train` distributes experiments concurrently across all machines via `asyncio.gather`, with each machine running its own sequential batch
+- **Per-machine model right-sizing**: each `MachineConfig` accepts an optional `agent_command` override so different hosts can run different-sized models (e.g. Opus on a large GPU, Haiku on a small one)
+- **Multi-target fine-tuning**: add `finetuner.targets` config block; `mat finetune start` starts one job per `(model, machine)` target concurrently via `ThreadPoolExecutor`; each target inherits backend defaults and overrides only the fields it declares
+- **`MachineConfig`** dataclass: `name`, `execution: ExecutionConfig`, `agent_command`
+- **`FineTuneTargetConfig`** dataclass: `name`, `model_id`, `machine`, `backend`, `num_epochs`, `batch_size`, `lora_r`, `customization_type`
+- **`MultiTargetFineTuner`**: orchestrates concurrent jobs across targets; each target gets its own `jobs_dir` subdirectory to avoid file collisions
+- Add `build_executor_for_machine()` factory and `_remote_ar_dir()` helper; `ExperimentResult` gains a `machine` field
+- Extract `_parse_execution_config()` helper to deduplicate YAML parsing across `training.execution` and `machines[*].execution`
+- Single-machine and single-target paths are fully backwards-compatible
+
 ## v1.2.2 — 2026-05-13
 - Restrict SES failure notification to a fixed subject and body; remove all job-specific data (error message, model, run ID, backend, timestamp) from email content
 

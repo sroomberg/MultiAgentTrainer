@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .config import ExecutionConfig
+    from .config import ExecutionConfig, MachineConfig
 
 
 @dataclass
@@ -188,3 +188,8 @@ def build_executor(execution_cfg: ExecutionConfig) -> Executor:
             container_base=execution_cfg.container_dir,
         )
     return LocalExecutor()
+
+
+def build_executor_for_machine(machine_cfg: MachineConfig) -> Executor:
+    """Construct the right Executor for a named MachineConfig."""
+    return build_executor(machine_cfg.execution)

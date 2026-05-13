@@ -653,3 +653,98 @@ def test_bedrock_cancel_job(bedrock_tuner: BedrockFineTuner, jobs_dir: Path) -> 
     saved = FineTuneJob.load(jobs_dir, job_id)
     assert saved is not None
     assert saved.status == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# MultiTargetFineTuner
+# ---------------------------------------------------------------------------
+
+
+class TestMultiTargetFineTuner:
+    def test_build_tuner_opensource(self, jobs_dir: Path) -> None:
+        """_build_tuner returns OpenSourceFineTuner with overridden model and epochs."""
+        from multiagenttrainer.finetuner.config import (
+            FineTunerConfig,
+            FineTuneTargetConfig,
+        )
+        from multiagenttrainer.finetuner.multi import MultiTargetFineTuner
+
+        base_cfg = FineTunerConfig(
+            backend="opensource",
+            jobs_dir=str(jobs_dir),
+        )
+        multi = MultiTargetFineTuner(base_cfg, console)
+        target = FineTuneTargetConfig(
+            name="small",
+            model_id="test/model-1b",
+            num_epochs=7,
+            batch_size=2,
+        )
+        tuner = multi._build_tuner(target)
+        assert isinstance(tuner, OpenSourceFineTuner)
+        assert tuner.cfg.model_id == "test/model-1b"
+        assert tuner.cfg.num_epochs == 7
+        assert tuner.cfg.batch_size == 2
+        # jobs go in a subdirectory named after the target
+        assert tuner.jobs_dir == jobs_dir / "small"
+
+    def test_build_tuner_bedrock(self, jobs_dir: Path) -> None:
+        """_build_tuner returns BedrockFineTuner with overridden model."""
+        from multiagenttrainer.finetuner.config import (
+            FineTunerConfig,
+            FineTuneTargetConfig,
+        )
+        from multiagenttrainer.finetuner.multi import MultiTargetFineTuner
+
+        base_cfg = FineTunerConfig(
+            backend="bedrock",
+            jobs_dir=str(jobs_dir),
+        )
+        multi = MultiTargetFineTuner(base_cfg, console)
+        target = FineTuneTargetConfig(
+            name="titan",
+            model_id="amazon.titan-text-express-v1",
+            backend="bedrock",
+            customization_type="FINE_TUNING",
+        )
+        tuner = multi._build_tuner(target)
+        assert isinstance(tuner, BedrockFineTuner)
+        assert tuner.cfg.base_model_id == "amazon.titan-text-express-v1"
+        assert tuner.cfg.customization_type == "FINE_TUNING"
+
+    def test_describe_targets(self, jobs_dir: Path) -> None:
+        """describe_targets returns one line per target."""
+        from multiagenttrainer.finetuner.config import (
+            FineTunerConfig,
+            FineTuneTargetConfig,
+        )
+        from multiagenttrainer.finetuner.multi import MultiTargetFineTuner
+
+        base_cfg = FineTunerConfig(
+            backend="opensource",
+            jobs_dir=str(jobs_dir),
+            targets=[
+                FineTuneTargetConfig(
+                    name="a", model_id="model-a", machine="gpu-large"
+                ),
+                FineTuneTargetConfig(name="b", model_id="model-b"),
+            ],
+        )
+        multi = MultiTargetFineTuner(base_cfg, console)
+        descs = multi.describe_targets()
+        assert len(descs) == 2
+        assert "model-a" in descs[0]
+        assert "gpu-large" in descs[0]
+        assert "model-b" in descs[1]
+        # no machine → no "on X" suffix
+        assert "on" not in descs[1]
+
+    def test_create_multi_target_fine_tuner_raises_without_targets(
+        self, jobs_dir: Path
+    ) -> None:
+        from multiagenttrainer.finetuner import create_multi_target_fine_tuner
+        from multiagenttrainer.finetuner.config import FineTunerConfig
+
+        cfg = FineTunerConfig(backend="opensource", jobs_dir=str(jobs_dir))
+        with pytest.raises(ValueError, match="targets"):
+            create_multi_target_fine_tuner(cfg, console)

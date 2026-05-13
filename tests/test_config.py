@@ -125,3 +125,95 @@ finetuner:
     assert br.customization_type == "FINE_TUNING"
     assert br.epochs == 2
     assert br.output_s3_uri == "s3://out-bucket/models/"
+
+
+def test_machines_parsed(tmp_path: Path) -> None:
+    """Named machines are parsed from the top-level machines key."""
+    cfg_file = tmp_path / "multiagenttrainer.yaml"
+    cfg_file.write_text(
+        """\
+machines:
+  - name: gpu-large
+    execution:
+      type: ssh
+      ssh_host: trainer1.example.com
+      ssh_key: ~/.ssh/id_ed25519
+      remote_dir: /tmp/mat-runs
+    agent_command: claude -p {prompt} --model claude-opus-4-7
+  - name: gpu-small
+    execution:
+      type: local
+"""
+    )
+    from multiagenttrainer.config import MachineConfig
+
+    cfg = load_config(cfg_file)
+    assert len(cfg.machines) == 2
+    big = cfg.machines[0]
+    assert isinstance(big, MachineConfig)
+    assert big.name == "gpu-large"
+    assert big.execution.type == "ssh"
+    assert big.execution.ssh_host == "trainer1.example.com"
+    assert big.execution.ssh_key == "~/.ssh/id_ed25519"
+    assert big.agent_command is not None
+    assert "claude-opus-4-7" in big.agent_command
+    small = cfg.machines[1]
+    assert small.name == "gpu-small"
+    assert small.execution.type == "local"
+    assert small.agent_command is None
+
+
+def test_machines_empty_by_default(sample_config_yaml: Path) -> None:
+    cfg = load_config(sample_config_yaml)
+    assert cfg.machines == []
+
+
+def test_finetuner_targets_parsed(tmp_path: Path) -> None:
+    """finetuner.targets are parsed into FineTuneTargetConfig objects."""
+    cfg_file = tmp_path / "multiagenttrainer.yaml"
+    cfg_file.write_text(
+        """\
+finetuner:
+  backend: opensource
+  targets:
+    - name: big-model
+      model_id: meta-llama/Llama-3.2-3B
+      machine: gpu-large
+      backend: opensource
+      num_epochs: 3
+      batch_size: 2
+      lora_r: 32
+    - name: bedrock-job
+      model_id: amazon.titan-text-lite-v1
+      backend: bedrock
+      customization_type: FINE_TUNING
+"""
+    )
+    from multiagenttrainer.finetuner.config import FineTuneTargetConfig
+
+    cfg = load_config(cfg_file)
+    assert cfg.finetuner is not None
+    targets = cfg.finetuner.targets
+    assert len(targets) == 2
+    t0 = targets[0]
+    assert isinstance(t0, FineTuneTargetConfig)
+    assert t0.name == "big-model"
+    assert t0.model_id == "meta-llama/Llama-3.2-3B"
+    assert t0.machine == "gpu-large"
+    assert t0.backend == "opensource"
+    assert t0.num_epochs == 3
+    assert t0.batch_size == 2
+    assert t0.lora_r == 32
+    t1 = targets[1]
+    assert t1.name == "bedrock-job"
+    assert t1.backend == "bedrock"
+    assert t1.customization_type == "FINE_TUNING"
+    assert t1.machine is None
+
+
+def test_finetuner_targets_empty_by_default(tmp_path: Path) -> None:
+    cfg_file = tmp_path / "multiagenttrainer.yaml"
+    cfg_file.write_text("finetuner:\n  backend: opensource\n")
+    cfg = load_config(cfg_file)
+    assert cfg.finetuner is not None
+    assert cfg.finetuner.targets == []

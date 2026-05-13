@@ -7,6 +7,29 @@ from typing import Literal
 
 
 @dataclass
+class FineTuneTargetConfig:
+    """A (model, machine) pairing for right-sized fine-tuning.
+
+    Each target overrides the model and optionally the backend and
+    per-backend hyperparameters from the parent FineTunerConfig.
+    The ``machine`` field references a top-level MachineConfig by name
+    and is metadata — it communicates which instance this target was
+    designed for but does not currently drive remote dispatch.
+    """
+
+    name: str
+    model_id: str
+    machine: str | None = None
+    backend: Literal["opensource", "bedrock"] | None = None
+    # OpenSource overrides (None → inherit from FineTunerConfig.opensource)
+    num_epochs: int | None = None
+    batch_size: int | None = None
+    lora_r: int | None = None
+    # Bedrock overrides
+    customization_type: str | None = None
+
+
+@dataclass
 class OpenSourceConfig:
     """Settings for HuggingFace + PEFT/LoRA fine-tuning."""
 
@@ -65,3 +88,4 @@ class FineTunerConfig:
     jobs_dir: str = "./finetune-jobs"
     opensource: OpenSourceConfig = field(default_factory=OpenSourceConfig)
     bedrock: BedrockConfig = field(default_factory=BedrockConfig)
+    targets: list[FineTuneTargetConfig] = field(default_factory=list)
