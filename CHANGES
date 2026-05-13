@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.2.2 — 2026-05-13
+- Restrict SES failure notification to a fixed subject and body; remove all job-specific data (error message, model, run ID, backend, timestamp) from email content
+
 ## v1.2.1 — 2026-05-13
 - Fix E501 line-length violation in cli.py introduced by notification wiring
 
