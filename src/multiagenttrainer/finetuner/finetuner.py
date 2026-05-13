@@ -9,12 +9,15 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from rich.console import Console
 
 from .config import BedrockConfig, OpenSourceConfig
 from .dataset import chunk_corpus, write_jsonl
+
+if TYPE_CHECKING:
+    from ..notifications.base import Notifier
 
 
 @dataclass
@@ -29,6 +32,7 @@ class FineTuneJob:
     output_model: str | None = None
     metrics: dict[str, float] = field(default_factory=dict)
     error: str | None = None
+    failure_notified: bool = False
 
     @staticmethod
     def _safe_id(job_id: str) -> str:
@@ -68,9 +72,15 @@ class FineTuner(abc.ABC):
     registering it in registry.py.
     """
 
-    def __init__(self, jobs_dir: Path, console: Console) -> None:
+    def __init__(
+        self,
+        jobs_dir: Path,
+        console: Console,
+        notifier: Notifier | None = None,
+    ) -> None:
         self.jobs_dir = jobs_dir
         self.console = console
+        self.notifier = notifier
         jobs_dir.mkdir(parents=True, exist_ok=True)
 
     @abc.abstractmethod
@@ -106,8 +116,14 @@ class OpenSourceFineTuner(FineTuner):
     Training runs in-process and blocks until complete.
     """
 
-    def __init__(self, cfg: OpenSourceConfig, jobs_dir: Path, console: Console) -> None:
-        super().__init__(jobs_dir, console)
+    def __init__(
+        self,
+        cfg: OpenSourceConfig,
+        jobs_dir: Path,
+        console: Console,
+        notifier: Notifier | None = None,
+    ) -> None:
+        super().__init__(jobs_dir, console, notifier)
         self.cfg = cfg
 
     def describe(self) -> str:
@@ -250,6 +266,19 @@ class OpenSourceFineTuner(FineTuner):
             job.status = "failed"
             job.error = str(exc)
             self.console.print(f"[red]Training failed:[/red] {exc}")
+            if self.notifier:
+                from ..notifications.base import FailureEvent
+
+                self.notifier.notify_failure(
+                    FailureEvent(
+                        run_id=job.job_id,
+                        backend="opensource",
+                        error=str(exc),
+                        model=job.model,
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+                job.failure_notified = True
 
         job.save(self.jobs_dir)
         return job
@@ -293,8 +322,14 @@ class BedrockFineTuner(FineTuner):
     that can be polled with get_status().
     """
 
-    def __init__(self, cfg: BedrockConfig, jobs_dir: Path, console: Console) -> None:
-        super().__init__(jobs_dir, console)
+    def __init__(
+        self,
+        cfg: BedrockConfig,
+        jobs_dir: Path,
+        console: Console,
+        notifier: Notifier | None = None,
+    ) -> None:
+        super().__init__(jobs_dir, console, notifier)
         self.cfg = cfg
 
     def describe(self) -> str:
@@ -389,6 +424,19 @@ class BedrockFineTuner(FineTuner):
         job.output_model = resp.get("outputModelArn")
         if resp.get("status") == "Failed":
             job.error = resp.get("failureMessage")
+            if self.notifier and not job.failure_notified:
+                from ..notifications.base import FailureEvent
+
+                self.notifier.notify_failure(
+                    FailureEvent(
+                        run_id=job.job_id,
+                        backend="bedrock",
+                        error=job.error or "Bedrock job failed",
+                        model=job.model,
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+                job.failure_notified = True
         job.save(self.jobs_dir)
         return job
 

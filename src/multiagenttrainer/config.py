@@ -9,6 +9,7 @@ from typing import Literal
 import yaml
 
 from .finetuner.config import BedrockConfig, FineTunerConfig, OpenSourceConfig
+from .notifications.ses import SESConfig
 from .sources import DataSource, create_source
 
 CONFIG_CANDIDATES = [
@@ -19,6 +20,13 @@ CONFIG_CANDIDATES = [
 ]
 
 _DEFAULT_AUTORESEARCH_REPO = "https://github.com/karpathy/autoresearch"
+
+
+@dataclass
+class NotificationsConfig:
+    """Top-level notifications configuration."""
+
+    ses: SESConfig | None = None
 
 
 @dataclass
@@ -68,6 +76,7 @@ class TrainerConfig:
     sources: list[DataSource] = field(default_factory=list)
     source_configs: list[dict[str, object]] = field(default_factory=list)
     finetuner: FineTunerConfig | None = None
+    notifications: NotificationsConfig | None = None
 
 
 def load_config(config_path: Path | None = None) -> TrainerConfig:
@@ -124,12 +133,19 @@ def load_config(config_path: Path | None = None) -> TrainerConfig:
     if ft_data:
         finetuner = _parse_finetuner_config(ft_data)
 
+    # Notifications settings
+    notifications: NotificationsConfig | None = None
+    notif_data = data.get("notifications")
+    if notif_data:
+        notifications = _parse_notifications_config(notif_data)
+
     return TrainerConfig(
         autoresearch=autoresearch,
         training=training,
         sources=sources,
         source_configs=raw_sources,
         finetuner=finetuner,
+        notifications=notifications,
     )
 
 
@@ -175,3 +191,22 @@ def _parse_finetuner_config(data: dict[str, object]) -> FineTunerConfig:
         opensource=opensource,
         bedrock=bedrock,
     )
+
+
+def _parse_notifications_config(data: dict[str, object]) -> NotificationsConfig:
+    ses_cfg: SESConfig | None = None
+    ses_data = data.get("ses")
+    if ses_data:
+        assert isinstance(ses_data, dict)
+        to_emails = ses_data.get("to_emails", [])
+        if isinstance(to_emails, str):
+            to_emails = [to_emails]
+        ses_cfg = SESConfig(
+            from_email=ses_data["from_email"],  # type: ignore[arg-type]
+            to_emails=list(to_emails),  # type: ignore[arg-type]
+            region=ses_data.get("region", "us-east-1"),  # type: ignore[arg-type]
+            subject_prefix=ses_data.get(  # type: ignore[arg-type]
+                "subject_prefix", "[MultiAgentTrainer]"
+            ),
+        )
+    return NotificationsConfig(ses=ses_cfg)

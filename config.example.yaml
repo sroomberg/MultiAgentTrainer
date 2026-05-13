@@ -41,6 +41,16 @@ training:
   max_experiments: 50
   output_dir: ./training-runs
 
+# Failure notifications (optional)
+# Requires: boto3 and an SES-verified sender address in your AWS account.
+notifications:
+  ses:
+    from_email: alerts@example.com
+    to_emails:
+      - oncall@example.com
+    region: us-east-1
+    subject_prefix: "[MultiAgentTrainer]"
+
 # Fine-tuning configuration (optional)
 # Run: mat finetune start
 finetuner:

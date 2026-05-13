@@ -9,7 +9,9 @@ import shutil
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import git as gitpython
 from rich.console import Console
@@ -17,6 +19,9 @@ from rich.console import Console
 from .config import AutoresearchConfig, TrainingConfig
 from .executor import Executor, build_executor
 from .progress import new_progress, write_progress
+
+if TYPE_CHECKING:
+    from .notifications.base import Notifier
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +49,7 @@ class Runner:
         console: Console | None = None,
         executor: Executor | None = None,
         name: str = "",
+        notifier: Notifier | None = None,
     ) -> None:
         self.ar_cfg = autoresearch_cfg
         self.tr_cfg = training_cfg
@@ -51,6 +57,7 @@ class Runner:
         self.run_id = uuid.uuid4().hex[:8]
         self.executor: Executor = executor or build_executor(training_cfg.execution)
         self.name = name or self.run_id
+        self.notifier = notifier
 
     def setup_workspace(self, corpus_path: Path | None = None) -> Path:
         """Clone or copy autoresearch into a working directory.
@@ -149,6 +156,19 @@ class Runner:
                 f"exit {result.exit_code}{bpb}"
                 + (f" ({result.error})" if result.error else "")
             )
+
+            if result.exit_code != 0 and self.notifier:
+                from .notifications.base import FailureEvent
+
+                self.notifier.notify_failure(
+                    FailureEvent(
+                        run_id=self.run_id,
+                        backend="runner",
+                        error=result.error or f"exit code {result.exit_code}",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        details={"experiment": str(result.experiment_id)},
+                    )
+                )
 
             progress.experiments.append(
                 {

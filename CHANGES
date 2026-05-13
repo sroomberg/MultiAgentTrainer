@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.0 — 2026-05-13
+- Add pluggable failure notification system with abstract `Notifier` base class
+- Add `SESNotifier` backend for failure alerts via AWS SES (configurable via `notifications.ses` in YAML config)
+- Notifications fire on fine-tuning failure (both `opensource` and `bedrock` backends) and on failed training experiments
+- Bedrock polling deduplicates notifications via `failure_notified` flag persisted to job JSON
+
 ## v1.1.2 — 2026-05-12
 - Add `GitHubRepoListSource` source type for ingesting an explicit list of repositories; accepts `owner/repo` shorthands or full URLs
 - Expose `--repo` / `-r` flag on `mat train`, `mat ingest`, and `mat sources` commands

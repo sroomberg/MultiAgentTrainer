@@ -15,6 +15,7 @@ from rich.table import Table
 from .config import load_config
 from .finetuner import FineTuneJob, create_fine_tuner
 from .ingest import Ingester
+from .notifications import build_notifier
 from .progress import find_progress_files, read_progress
 from .report import generate_report, save_report
 from .runner import Runner
@@ -88,7 +89,8 @@ def train(
             corpus_path = None
 
     # Setup and run
-    runner = Runner(cfg.autoresearch, cfg.training, console, name=name)
+    notifier = build_notifier(cfg.notifications.ses if cfg.notifications else None)
+    runner = Runner(cfg.autoresearch, cfg.training, console, name=name, notifier=notifier)
     workspace = runner.setup_workspace(corpus_path)
 
     results = asyncio.run(runner.run_experiments(workspace))
@@ -268,7 +270,8 @@ def _require_finetuner_config(config: Path | None) -> tuple:
             "Add one to your multiagenttrainer.yaml.[/red]"
         )
         raise typer.Exit(1)
-    return cfg, create_fine_tuner(cfg.finetuner, console)
+    notifier = build_notifier(cfg.notifications.ses if cfg.notifications else None)
+    return cfg, create_fine_tuner(cfg.finetuner, console, notifier)
 
 
 def _print_job(job: FineTuneJob) -> None:
