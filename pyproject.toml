@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "multiagenttrainer"
-version = "2.0.1"
+version = "2.0.2"
 description = "Collect data from multiple sources and run autonomous LLM training via autoresearch"
 readme = "README.md"
 requires-python = ">=3.10"

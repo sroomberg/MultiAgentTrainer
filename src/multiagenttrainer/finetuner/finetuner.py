@@ -11,7 +11,7 @@ from typing import Any, Literal, Optional
 
 from rich.console import Console
 
-from ..notifications.base import Notifier
+from ..notifications.base import FailureEvent, Notifier
 from .config import BedrockConfig, OpenSourceConfig
 from .dataset import chunk_corpus, write_jsonl
 
@@ -98,6 +98,20 @@ class FineTuner(abc.ABC):
     @abc.abstractmethod
     def describe(self) -> str:
         """Short human-readable description of this backend."""
+
+    def _notify_job_failure(self, job: FineTuneJob, error: str) -> None:
+        if not self.notifier or job.failure_notified:
+            return
+        self.notifier.notify_failure(
+            FailureEvent(
+                run_id=job.job_id,
+                backend=job.backend,
+                error=error,
+                model=job.model,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+        )
+        job.failure_notified = True
 
 
 # ---------------------------------------------------------------------------
@@ -262,19 +276,7 @@ class OpenSourceFineTuner(FineTuner):
             job.status = "failed"
             job.error = str(exc)
             self.console.print(f"[red]Training failed:[/red] {exc}")
-            if self.notifier:
-                from ..notifications.base import FailureEvent
-
-                self.notifier.notify_failure(
-                    FailureEvent(
-                        run_id=job.job_id,
-                        backend="opensource",
-                        error=str(exc),
-                        model=job.model,
-                        timestamp=datetime.now(timezone.utc).isoformat(),
-                    )
-                )
-                job.failure_notified = True
+            self._notify_job_failure(job, str(exc))
 
         job.save(self.jobs_dir)
         return job
@@ -420,19 +422,7 @@ class BedrockFineTuner(FineTuner):
         job.output_model = resp.get("outputModelArn")
         if resp.get("status") == "Failed":
             job.error = resp.get("failureMessage")
-            if self.notifier and not job.failure_notified:
-                from ..notifications.base import FailureEvent
-
-                self.notifier.notify_failure(
-                    FailureEvent(
-                        run_id=job.job_id,
-                        backend="bedrock",
-                        error=job.error or "Bedrock job failed",
-                        model=job.model,
-                        timestamp=datetime.now(timezone.utc).isoformat(),
-                    )
-                )
-                job.failure_notified = True
+            self._notify_job_failure(job, job.error or "Bedrock job failed")
         job.save(self.jobs_dir)
         return job
 

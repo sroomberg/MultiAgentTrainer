@@ -85,7 +85,6 @@ class TestMultiMachineRunner:
                 calls.append(self.name)
                 return RunResult(exit_code=0, stdout="val_bpb=1.0", stderr="")
 
-
         machines = [
             MachineConfig(name="m1", execution=ExecutionConfig(type="local")),
             MachineConfig(name="m2", execution=ExecutionConfig(type="local")),

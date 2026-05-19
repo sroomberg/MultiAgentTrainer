@@ -19,5 +19,3 @@ __all__ = [
     "TrainingConfig",
     "load_config",
 ]
-
-__version__ = "1.1.0"

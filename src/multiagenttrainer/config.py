@@ -181,7 +181,10 @@ def _parse_execution_config(data: dict) -> ExecutionConfig:
 
 def _parse_finetuner_config(data: dict[str, object]) -> FineTunerConfig:
     os_data = data.get("opensource", {})
-    assert isinstance(os_data, dict)
+    if not isinstance(os_data, dict):
+        raise ValueError(
+            f"finetuner.opensource must be a mapping, got {type(os_data).__name__}"
+        )
     opensource = OpenSourceConfig(
         model_id=os_data.get("model_id", "meta-llama/Llama-3.2-1B"),  # type: ignore[arg-type]
         output_dir=os_data.get("output_dir", "./finetuned-models"),  # type: ignore[arg-type]
@@ -201,7 +204,10 @@ def _parse_finetuner_config(data: dict[str, object]) -> FineTunerConfig:
     )
 
     br_data = data.get("bedrock", {})
-    assert isinstance(br_data, dict)
+    if not isinstance(br_data, dict):
+        raise ValueError(
+            f"finetuner.bedrock must be a mapping, got {type(br_data).__name__}"
+        )
     bedrock = BedrockConfig(
         base_model_id=br_data.get("base_model_id", "amazon.titan-text-lite-v1"),  # type: ignore[arg-type]
         region=br_data.get("region", "us-east-1"),  # type: ignore[arg-type]
@@ -242,7 +248,10 @@ def _parse_notifications_config(data: dict[str, object]) -> NotificationsConfig:
     ses_cfg: Optional[SESConfig] = None
     ses_data = data.get("ses")
     if ses_data:
-        assert isinstance(ses_data, dict)
+        if not isinstance(ses_data, dict):
+            raise ValueError(
+                f"notifications.ses must be a mapping, got {type(ses_data).__name__}"
+            )
         to_emails = ses_data.get("to_emails", [])
         if isinstance(to_emails, str):
             to_emails = [to_emails]

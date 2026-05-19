@@ -41,6 +41,5 @@ class GitHubRepoSource(DataSource):
 
     def describe(self) -> str:
         return (
-            f"github_repo: {self.owner}/{self.repo}"
-            f"{self._branch_suffix(self.branch)}"
+            f"github_repo: {self.owner}/{self.repo}{self._branch_suffix(self.branch)}"
         )

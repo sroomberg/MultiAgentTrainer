@@ -147,9 +147,7 @@ class DockerExecutor(Executor):
             return RunResult(exit_code=-1, stdout="", stderr="", error=str(exc))
 
 
-async def _communicate(
-    proc: asyncio.subprocess.Process, timeout: float
-) -> RunResult:
+async def _communicate(proc: asyncio.subprocess.Process, timeout: float) -> RunResult:
     """Wait for *proc* to finish, handling timeout and output decoding."""
     try:
         stdout_raw, stderr_raw = await asyncio.wait_for(

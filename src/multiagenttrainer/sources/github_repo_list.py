@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .base import DataSource
-from .remote_repo import RemoteRepoSource
+from .remote_repo import RemoteRepoSource, _repo_name_from_url
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class GitHubRepoListSource(DataSource):
         parent = self._prepare_dest(staging_dir)
 
         for url in self.repos:
-            repo_name = url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
+            repo_name = _repo_name_from_url(url)
             source = RemoteRepoSource(url=url, branch=self.branch, name=repo_name)
             try:
                 source.fetch(parent)

@@ -39,9 +39,7 @@ class SESNotifier(Notifier):
                 Source=self.cfg.from_email,
                 Destination={"ToAddresses": self.cfg.to_emails},
                 Message={
-                    "Subject": {
-                        "Data": f"{self.cfg.subject_prefix} {self._SUBJECT}"
-                    },
+                    "Subject": {"Data": f"{self.cfg.subject_prefix} {self._SUBJECT}"},
                     "Body": {"Text": {"Data": self._BODY}},
                 },
             )

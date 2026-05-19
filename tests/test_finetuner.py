@@ -724,9 +724,7 @@ class TestMultiTargetFineTuner:
             backend="opensource",
             jobs_dir=str(jobs_dir),
             targets=[
-                FineTuneTargetConfig(
-                    name="a", model_id="model-a", machine="gpu-large"
-                ),
+                FineTuneTargetConfig(name="a", model_id="model-a", machine="gpu-large"),
                 FineTuneTargetConfig(name="b", model_id="model-b"),
             ],
         )

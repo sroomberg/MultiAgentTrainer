@@ -17,10 +17,21 @@ from rich.console import Console
 
 from .config import AutoresearchConfig, ExecutionConfig, MachineConfig, TrainingConfig
 from .executor import Executor, build_executor, build_executor_for_machine
-from .notifications.base import Notifier
-from .progress import new_progress, write_progress
+from .notifications.base import FailureEvent, Notifier
+from .progress import RunProgress, new_progress, write_progress
 
 log = logging.getLogger(__name__)
+
+_AGENT_GRACE_SECONDS = 120
+
+_SETUP_PROMPT = (
+    "Hi have a look at program.md and let's kick off a new experiment! "
+    "let's do the setup first."
+)
+_CONTINUE_PROMPT = (
+    "Great, let's kick off the next experiment. "
+    "Review the results so far and try something new."
+)
 
 
 @dataclass
@@ -135,16 +146,11 @@ class Runner:
         remote_ar_dir = _remote_ar_dir(self.tr_cfg.execution, self.run_id, ar_dir)
 
         if self.tr_cfg.execution.type in ("ssh", "docker"):
-            self.console.print(
-                f"  [dim]Uploading workspace → {remote_ar_dir}…[/dim]"
-            )
+            self.console.print(f"  [dim]Uploading workspace → {remote_ar_dir}…[/dim]")
             await self.executor.upload(ar_dir, remote_ar_dir)
             self.console.print("  [dim]Upload complete[/dim]")
 
-        prompt = (
-            "Hi have a look at program.md and let's kick off a new experiment! "
-            "let's do the setup first."
-        )
+        prompt = _SETUP_PROMPT
 
         for i in range(1, self.tr_cfg.max_experiments + 1):
             self.console.print(
@@ -161,18 +167,8 @@ class Runner:
                 + (f" ({result.error})" if result.error else "")
             )
 
-            if result.exit_code != 0 and self.notifier:
-                from .notifications.base import FailureEvent
-
-                self.notifier.notify_failure(
-                    FailureEvent(
-                        run_id=self.run_id,
-                        backend="runner",
-                        error=result.error or f"exit code {result.exit_code}",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
-                        details={"experiment": str(result.experiment_id)},
-                    )
-                )
+            if result.exit_code != 0:
+                self._notify_experiment_failure(result)
 
             progress.experiments.append(
                 {
@@ -185,10 +181,7 @@ class Runner:
             )
             write_progress(progress_path, progress)
 
-            prompt = (
-                "Great, let's kick off the next experiment. "
-                "Review the results so far and try something new."
-            )
+            prompt = _CONTINUE_PROMPT
 
         progress.status = "done"
         write_progress(progress_path, progress)
@@ -245,7 +238,7 @@ class Runner:
         ar_dir: Path,
         experiment_ids: range,
         results: list[ExperimentResult],
-        progress: object,
+        progress: RunProgress,
         progress_path: Path,
         lock: asyncio.Lock,
     ) -> None:
@@ -260,10 +253,7 @@ class Runner:
 
         agent_command = machine.agent_command or self.tr_cfg.agent_command
 
-        prompt = (
-            "Hi have a look at program.md and let's kick off a new experiment! "
-            "let's do the setup first."
-        )
+        prompt = _SETUP_PROMPT
 
         for exp_id in experiment_ids:
             result = await self._run_one(
@@ -279,25 +269,12 @@ class Runner:
                 + (f" ({result.error})" if result.error else "")
             )
 
-            if result.exit_code != 0 and self.notifier:
-                from .notifications.base import FailureEvent
-
-                self.notifier.notify_failure(
-                    FailureEvent(
-                        run_id=self.run_id,
-                        backend="runner",
-                        error=result.error or f"exit code {result.exit_code}",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
-                        details={
-                            "experiment": str(exp_id),
-                            "machine": machine.name,
-                        },
-                    )
-                )
+            if result.exit_code != 0:
+                self._notify_experiment_failure(result, machine.name)
 
             async with lock:
                 results.append(result)
-                progress.experiments.append(  # type: ignore[attr-defined]
+                progress.experiments.append(
                     {
                         "experiment_id": result.experiment_id,
                         "exit_code": result.exit_code,
@@ -307,12 +284,9 @@ class Runner:
                         "machine": machine.name,
                     }
                 )
-                write_progress(progress_path, progress)  # type: ignore[arg-type]
+                write_progress(progress_path, progress)
 
-            prompt = (
-                "Great, let's kick off the next experiment. "
-                "Review the results so far and try something new."
-            )
+            prompt = _CONTINUE_PROMPT
 
     # ------------------------------------------------------------------
     # Shared helpers
@@ -336,7 +310,7 @@ class Runner:
         result = await executor.run(
             cmd=cmd,
             cwd=ar_dir,
-            timeout=self.ar_cfg.train_time + 120,
+            timeout=self.ar_cfg.train_time + _AGENT_GRACE_SECONDS,
         )
 
         val_bpb = self._parse_val_bpb(result.stdout + result.stderr)
@@ -349,6 +323,26 @@ class Runner:
             stdout=result.stdout,
             stderr=result.stderr,
             error=result.error,
+        )
+
+    def _notify_experiment_failure(
+        self,
+        result: ExperimentResult,
+        machine_name: Optional[str] = None,
+    ) -> None:
+        if not self.notifier:
+            return
+        details: dict = {"experiment": str(result.experiment_id)}
+        if machine_name is not None:
+            details["machine"] = machine_name
+        self.notifier.notify_failure(
+            FailureEvent(
+                run_id=self.run_id,
+                backend="runner",
+                error=result.error or f"exit code {result.exit_code}",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                details=details,
+            )
         )
 
     @staticmethod

@@ -9,6 +9,10 @@ import git as gitpython
 from .base import DataSource
 
 
+def _repo_name_from_url(url: str) -> str:
+    return url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
+
+
 class RemoteRepoSource(DataSource):
     """Clone a remote git repository by URL."""
 
@@ -20,7 +24,7 @@ class RemoteRepoSource(DataSource):
     ) -> None:
         self.url = url
         self.branch = branch
-        self.name = name or url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
+        self.name = name or _repo_name_from_url(url)
 
     def fetch(self, staging_dir: Path) -> Path:
         dest = self._prepare_dest(staging_dir)
